@@ -163,3 +163,36 @@ E2E를 처음 실행할 때 브라우저가 없다면 `npx playwright install ch
 `http://localhost:5173/?debug`로 열면 콘솔에서 `__fx`를 쓸 수 있습니다.
 예: `__fx.snapshot()`, `__fx.spawn('boss', 1200, 820)`, `__fx.startWave(5)`, `__fx.setDebug({ invincible: true })`,
 `__fx.setTimeScale(0.2)`, `__fx.setTerrainSeed(42)`(다음 판 지형 고정).
+
+## Codex CLI와 Claude Code CLI 함께 사용하기
+
+두 CLI는 같은 로컬 저장소와 이 Mac의 GitHub 인증을 사용할 수 있습니다.
+공통 작업 지침은 `AGENTS.md`에 있으며, `CLAUDE.md`가 이를 가져옵니다.
+이미 열려 있는 세션에는 두 파일을 읽도록 요청하거나 프로젝트 폴더에서 새 세션을 시작하세요.
+
+```bash
+cd /Users/nadohyeon/project
+codex
+```
+
+Claude Code를 사용할 때는 같은 폴더에서 `claude`를 실행합니다.
+같은 폴더에서는 한 도구의 작업이 끝난 뒤 다른 도구에 이어서 맡기세요.
+동시에 수정하려면 별도 Git worktree와 별도 브랜치를 사용합니다.
+코드와 Git 이력은 공유하지만 두 도구의 대화 이력은 별개입니다.
+
+GitHub 반영까지 원하면 어느 CLI에든 다음과 같이 요청할 수 있습니다.
+
+> 이 기능을 구현하고 검증한 뒤, 이번 작업의 변경 사항만 커밋하고 현재 브랜치에 push해줘.
+
+파일을 저장하거나 커밋하는 것만으로 GitHub에 업로드되지는 않습니다.
+push는 `nxodh/project`의 현재 작업 브랜치를 업데이트하며, `main` 반영은 별도의 PR 병합으로 진행합니다.
+Claude 클라우드에서 이어서 작업할 때도 GitHub의 최신 브랜치를 가져와야 합니다.
+
+```bash
+git status --short --branch
+git branch -vv
+git remote -v
+```
+
+위 명령으로 현재 변경 사항, 브랜치의 추적 대상, 원격 저장소를 확인할 수 있습니다.
+인증과 실행 승인은 각 CLI의 설정을 따릅니다.
