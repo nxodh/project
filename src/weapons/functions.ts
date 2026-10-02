@@ -22,17 +22,18 @@ registerWeapon({
   tuning: WEAPON_TUNING.linear,
 });
 
-// ② 이차함수 y = x²,  x∈[0, 1]
-// 꼭짓점(총구)에서 조준축에 접하며 출발해 한쪽으로 점점 크게 휘어진다.
+// ② 이차함수 y = −x²,  x∈[−1, 1]
+// 꼭짓점이 한가운데 있는 좌우 대칭 포물선(아치). 총구에서 솟아 정점을 찍고 조준선 위의 같은 높이로 내려온다.
+// 한쪽 가지만 쓰면 그냥 휜 선처럼 보여, 양쪽 가지와 꼭짓점이 모두 보이도록 정의역을 대칭으로 잡았다.
 registerWeapon({
   id: 'quadratic',
   name: '이차함수',
   shape: '포물선',
-  formula: 'y = x²',
-  role: '느린 발사 · 높은 피해 · 넓은 높이 범위',
+  formula: 'y = −x²',
+  role: '느린 발사 · 높은 피해 · 위로 솟았다 내리꽂는 대칭 포물선',
   color: WHITE,
-  domain: [0, 1],
-  fn: (x) => x * x,
+  domain: [-1, 1],
+  fn: (x) => -(x * x),
   tuning: WEAPON_TUNING.quadratic,
 });
 

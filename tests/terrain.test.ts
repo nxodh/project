@@ -60,6 +60,28 @@ describe('무한 지형', () => {
 });
 
 describe('카메라', () => {
+  it('데드존 안에서는 카메라가 움직이지 않는다(조준 안정)', () => {
+    const world = new World(1);
+    world.updateCamera(0, true);
+    const x0 = world.camera.x;
+    for (const dx of [-200, 150, 240, -250, 0]) {
+      world.player.body.x = x0 + VIEW.width / 2 + dx;
+      for (let i = 0; i < 120; i++) world.updateCamera(STEP);
+      expect(world.camera.x).toBe(x0);
+    }
+  });
+
+  it('데드존을 벗어나면 그 가장자리를 따라간다', () => {
+    const world = new World(1);
+    world.updateCamera(0, true);
+    world.player.body.x += 900;
+    for (let i = 0; i < 600; i++) world.updateCamera(STEP);
+    expect(world.player.body.x - (world.camera.x + VIEW.width / 2)).toBeCloseTo(CAMERA.deadZone, 0);
+    world.player.body.x -= 1800;
+    for (let i = 0; i < 600; i++) world.updateCamera(STEP);
+    expect(world.player.body.x - (world.camera.x + VIEW.width / 2)).toBeCloseTo(-CAMERA.deadZone, 0);
+  });
+
   it('플레이어를 따라 움직이고, 화면 좌표 + 카메라 = 월드 좌표', () => {
     const world = new World(1);
     const input = new FakeInput();
@@ -72,8 +94,8 @@ describe('카메라', () => {
     }
     const p = world.player.body;
     expect(p.x).toBeGreaterThan(1600); // 첫 청크를 넘어 계속 달린다
-    const expected = p.x + Math.max(-1, Math.min(1, p.vx / 330)) * CAMERA.lookAhead - VIEW.width / 2;
-    expect(Math.abs(world.camera.x - expected)).toBeLessThan(120);
+    // 플레이어는 화면 가운데 데드존 안(또는 가장자리 부근)에 머문다
+    expect(Math.abs(p.x - (world.camera.x + VIEW.width / 2))).toBeLessThan(CAMERA.deadZone + 120);
     const v = { x: 640, y: 300 };
     const w = world.viewToWorld(v);
     expect(w.x - world.camera.x).toBeCloseTo(640, 9);

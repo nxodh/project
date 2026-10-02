@@ -125,6 +125,33 @@ export function makeAimFrame(
   return { ox: origin.x, oy: origin.y, fx, fy, nx, ny };
 }
 
+const ALIGN_MIN_RATIO = 0.2;
+
+/**
+ * 곡선의 끝점이 조준선(총구→커서) 위에 오도록 조준 좌표계를 돌린다.
+ * 지수·로그·탄젠트처럼 끝이 조준축에서 멀리 벗어나는 함수도 '커서 쪽으로 뻗는다'는 느낌을 유지한다.
+ * 끝점이 이미 축 위에 있거나 거의 그렇다(전방 길이의 20% 미만)면 돌리지 않는다: 직선·사인·포물선·반원, 그리고 절댓값(돌리면 V자 꼭짓점이 더 깊어져 바닥에 걸린다).
+ * 미리보기와 발사가 모두 이 함수를 거치므로 두 경로는 여전히 같다.
+ */
+export function makeEndAlignedFrame(def: FunctionWeaponDef, origin: Vec2, dir: Vec2, range?: number): AimFrame {
+  const local = getLocalCurve(def, range);
+  const ex = local.lx[local.n - 1];
+  const ey = local.ly[local.n - 1];
+  let frame = makeAimFrame(origin, dir);
+  if (Math.abs(ey) < ALIGN_MIN_RATIO * ex) return frame;
+  const target = Math.atan2(dir.y, dir.x);
+  // 왼쪽을 볼 때의 거울 반전 때문에 한 번에 안 맞을 수 있어 몇 번 보정한다.
+  for (let k = 0; k < 4; k++) {
+    const end = localToWorld(frame, ex, ey);
+    let delta = Math.atan2(end.y - origin.y, end.x - origin.x) - target;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    if (Math.abs(delta) < 1e-4) break;
+    const a = Math.atan2(frame.fy, frame.fx) - delta;
+    frame = makeAimFrame(origin, { x: Math.cos(a), y: Math.sin(a) });
+  }
+  return frame;
+}
+
 export function localToWorld(frame: AimFrame, lx: number, ly: number): Vec2 {
   return {
     x: frame.ox + frame.fx * lx + frame.nx * ly,

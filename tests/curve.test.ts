@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import '../src/weapons/functions';
 import { COMBAT } from '../src/config';
 import { getWeapons } from '../src/weapons/registry';
-import { buildCurvePath, getLocalCurve, makeAimFrame, type CurvePath } from '../src/weapons/curve';
+import { buildCurvePath, getLocalCurve, makeAimFrame, makeEndAlignedFrame, type CurvePath } from '../src/weapons/curve';
 import { Arena, type Solid } from '../src/world/arena';
 import type { FunctionWeaponDef } from '../src/weapons/types';
 
@@ -61,18 +61,26 @@ describe('곡선 형태', () => {
     expect(Math.max(...Array.from(c.ly, Math.abs))).toBe(0);
   });
 
-  it('이차함수: 조준축에 접하며 출발해 한쪽으로 휘는 포물선 (y = x²)', () => {
+  it('이차함수: 꼭짓점이 한가운데인 좌우 대칭 포물선 (y = −x²)', () => {
     const w = byId('quadratic');
     const c = getLocalCurve(w);
     const L = w.tuning.range;
     const A = w.tuning.amplitude;
     for (let i = 0; i < c.n; i += 7) {
       const t = c.lx[i] / L;
-      expect(c.ly[i]).toBeCloseTo(A * t * t, 0);
+      expect(c.ly[i]).toBeCloseTo(A * (1 - (2 * t - 1) ** 2), 0);
     }
+    // 시작과 끝이 같은 높이, 정점은 정확히 가운데
+    expect(Math.abs(c.ly[c.n - 1])).toBeLessThan(0.5);
+    let top = 0;
+    for (let i = 1; i < c.n; i++) if (c.ly[i] > c.ly[top]) top = i;
+    expect(c.lx[top] / L).toBeCloseTo(0.5, 1);
+    expect(c.ly[top]).toBeCloseTo(A, 0);
+    // 곡률 일정(위로 볼록): 기울기가 단조 감소
     const s = slopes(c.ly, c.lx);
-    expect(Math.abs(s[0])).toBeLessThan(0.02); // 시작 접선이 조준축과 평행
-    for (let i = 1; i < s.length; i++) expect(s[i]).toBeGreaterThanOrEqual(s[i - 1] - 1e-6); // 곡률 일정(볼록)
+    for (let i = 1; i < s.length; i++) expect(s[i]).toBeLessThanOrEqual(s[i - 1] + 1e-6);
+    expect(s[0]).toBeGreaterThan(0);
+    expect(s[s.length - 1]).toBeLessThan(0);
   });
 
   it('사인함수: 조준축을 중심으로 2회 진동 (내부 영점 3개, 극값 ±A)', () => {
@@ -121,10 +129,10 @@ describe('곡선 형태', () => {
     const s = slopes(c.ly, c.lx);
     expect(s[0]).toBeLessThan(0.15);
     expect(s[s.length - 1]).toBeGreaterThan(2.5);
-    // 이차함수보다 끝부분이 훨씬 가파르다
+    // 이차함수의 가장 가파른 곳보다 끝부분이 훨씬 가파르다
     const q = getLocalCurve(byId('quadratic'));
     const qs = slopes(q.ly, q.lx);
-    expect(s[s.length - 1]).toBeGreaterThan(3 * qs[qs.length - 1]);
+    expect(s[s.length - 1]).toBeGreaterThan(2 * Math.max(...qs.map(Math.abs)));
   });
 });
 
@@ -248,5 +256,34 @@ describe('지형 충돌로 곡선 자르기', () => {
     const p: CurvePath = buildCurvePath(byId('abs'), makeAimFrame({ x: 600, y: 300 }, { x: 1, y: 0 }), empty);
     expect(p.blocked).toBe(false);
     expect(p.length).toBeCloseTo(p.fullLength, 6);
+  });
+});
+
+describe('끝점 정렬 조준', () => {
+  it('끝이 축에서 벗어나는 함수도 곡선의 끝점이 커서 방향 위에 놓인다(좌우·위아래 모두)', () => {
+    const empty = Arena.fixed([]);
+    const origin = { x: 600, y: 400 };
+    for (const id of ['exp', 'log', 'reciprocal', 'tan']) {
+      const w = byId(id);
+      for (const deg of [0, 30, -45, 90, 150, 180, -135]) {
+        const rad = (deg * Math.PI) / 180;
+        const dir = { x: Math.cos(rad), y: Math.sin(rad) };
+        if (Math.abs(dir.x) < 1e-6) continue; // 정확히 수직은 거울 반전 경계
+        const path = buildCurvePath(w, makeEndAlignedFrame(w, origin, dir), empty);
+        const ex = path.xs[path.count - 1] - origin.x;
+        const ey = path.ys[path.count - 1] - origin.y;
+        const diff = Math.atan2(ey, ex) - rad;
+        expect(Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)))).toBeLessThan(0.01);
+      }
+    }
+  });
+
+  it('끝이 축 위이거나 거의 그런 함수(직선·사인·이차·반원·절댓값)는 정렬해도 그대로다', () => {
+    const origin = { x: 100, y: 100 };
+    const dir = { x: 0.8, y: -0.6 };
+    for (const id of ['linear', 'sine', 'quadratic', 'circle', 'abs']) {
+      const w = byId(id);
+      expect(makeEndAlignedFrame(w, origin, dir)).toEqual(makeAimFrame(origin, dir));
+    }
   });
 });

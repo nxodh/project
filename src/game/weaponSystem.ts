@@ -1,7 +1,7 @@
 import { COMBAT } from '../config';
 import type { Input } from '../core/input';
 import { CurveAttack } from '../weapons/attack';
-import { buildCurvePath, makeAimFrame, type CurvePath } from '../weapons/curve';
+import { buildCurvePath, makeEndAlignedFrame, type CurvePath } from '../weapons/curve';
 import type { World } from './world';
 
 /**
@@ -11,7 +11,7 @@ import type { World } from './world';
 export function computeAttackPath(world: World, weaponIndex = world.player.weaponIndex): CurvePath {
   const p = world.player;
   const def = world.weapons[weaponIndex];
-  const frame = makeAimFrame(p.muzzle(), p.aim);
+  const frame = makeEndAlignedFrame(def, p.muzzle(), p.aim);
   return buildCurvePath(def, frame, world.arena, p.shoulder());
 }
 

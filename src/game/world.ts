@@ -80,13 +80,17 @@ export class World {
   }
 
   /**
-   * 카메라가 플레이어를 부드럽게 따라가고, 달리는 방향으로 화면을 조금 더 보여 준다.
-   * (조준 방향을 기준으로 하면 커서 → 조준 → 카메라 → 커서가 가리키는 월드 점이 서로 물려 흔들리므로 속도를 쓴다.)
+   * 카메라는 플레이어가 화면 가운데 데드존을 벗어날 때만 따라간다.
+   * 평소 이동·점프에는 화면이 가만히 있어 커서 위치가 월드에서 흔들리지 않는다.
    */
   updateCamera(dt: number, snap = false): void {
     const p = this.player;
-    const lead = Math.max(-1, Math.min(1, p.body.vx / PLAYER.moveSpeed)) * CAMERA.lookAhead;
-    const targetX = p.body.x + lead - VIEW.width / 2;
+    const half = VIEW.width / 2;
+    let targetX = this.camera.x;
+    const offset = p.body.x - (this.camera.x + half);
+    if (snap) targetX = p.body.x - half;
+    else if (offset > CAMERA.deadZone) targetX = p.body.x - CAMERA.deadZone - half;
+    else if (offset < -CAMERA.deadZone) targetX = p.body.x + CAMERA.deadZone - half;
     if (snap) {
       this.camera.x = targetX;
       return;
