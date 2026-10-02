@@ -132,13 +132,13 @@ export interface WeaponTuning {
 export const WEAPON_TUNING = {
   // 너프: 피해 12→8, 대기 0.17→0.24, 사거리 980→720, 판정 4→3.5 (DPS 70 → 33)
   linear: { damage: 8, cooldown: 0.24, range: 720, amplitude: 0, speed: 3600, hold: 0.05, fade: 0.14, hitRadius: 3.5, knockback: 90 },
-  quadratic: { damage: 24, cooldown: 0.65, range: 560, amplitude: 170, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
+  quadratic: { damage: 24, cooldown: 0.65, range: 600, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
   sine: { damage: 18, cooldown: 0.38, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
   abs: { damage: 32, cooldown: 0.8, range: 420, amplitude: 62, speed: 1500, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 340 },
   exp: { damage: 46, cooldown: 0.9, range: 340, amplitude: 260, speed: 1350, hold: 0.14, fade: 0.24, hitRadius: 9, knockback: 380 },
   log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  reciprocal: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 130, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
+  floor: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1500, hold: 0.16, fade: 0.22, hitRadius: 7, knockback: 200 },
+  circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 170, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
   tan: { damage: 36, cooldown: 1.0, range: 460, amplitude: 220, speed: 1500, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
 } satisfies Record<string, WeaponTuning>;
 

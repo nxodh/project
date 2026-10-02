@@ -30,7 +30,7 @@ describe('함수 무기 등록', () => {
       'abs',
       'exp',
       'log',
-      'reciprocal',
+      'floor',
       'circle',
       'tan',
     ]);
@@ -152,10 +152,31 @@ describe('추가 함수 곡선 형태', () => {
     expect(late).toBeLessThan(0.12);
   });
 
-  it('유리함수: 로그와 반대로 아래로 내리꽂은 뒤 낮게 깔린다', () => {
-    expect(at('reciprocal', 0.1)).toBeLessThan(-0.4);
-    expect(at('reciprocal', 1)).toBeCloseTo(-1, 1);
-    for (let t = 0.05; t < 1; t += 0.05) expect(at('reciprocal', t + 0.05)).toBeLessThanOrEqual(at('reciprocal', t) + 1e-6);
+  it('계단함수: 수평 구간과 수직 구간이 번갈아 나오는 3칸 계단', () => {
+    const w = byId('floor');
+    const c = getLocalCurve(w);
+    const A = w.tuning.amplitude;
+    // 단조 증가, 끝은 최대 높이
+    for (let i = 1; i < c.n; i++) expect(c.ly[i]).toBeGreaterThanOrEqual(c.ly[i - 1] - 1e-6);
+    expect(c.ly[c.n - 1]).toBeCloseTo(A, 0);
+    // 수평 구간(기울기 0)이 대부분이고, 그 사이를 수직에 가까운 구간이 이어 준다
+    let flat = 0;
+    let steep = 0;
+    let risers = 0;
+    let inRiser = false;
+    for (let i = 1; i < c.n; i++) {
+      const dx = c.lx[i] - c.lx[i - 1];
+      const dy = c.ly[i] - c.ly[i - 1];
+      if (Math.abs(dy) < 1e-6) flat++;
+      const isSteep = dy > 20 * Math.abs(dx) && dy > 1e-6;
+      if (isSteep) steep++;
+      if (isSteep && !inRiser) risers++;
+      inRiser = isSteep;
+    }
+    expect(flat).toBeGreaterThan(c.n * 0.5);
+    expect(steep).toBeGreaterThan(c.n * 0.1);
+    // 계단은 3칸: 높이가 3번 올라간다
+    expect(risers).toBe(3);
   });
 
   it('원(반원): 가운데에서 최고점, 양 끝에서 조준축으로 돌아오는 아치', () => {
@@ -263,7 +284,7 @@ describe('끝점 정렬 조준', () => {
   it('끝이 축에서 벗어나는 함수도 곡선의 끝점이 커서 방향 위에 놓인다(좌우·위아래 모두)', () => {
     const empty = Arena.fixed([]);
     const origin = { x: 600, y: 400 };
-    for (const id of ['exp', 'log', 'reciprocal', 'tan']) {
+    for (const id of ['exp', 'log', 'floor', 'tan']) {
       const w = byId(id);
       for (const deg of [0, 30, -45, 90, 150, 180, -135]) {
         const rad = (deg * Math.PI) / 180;
