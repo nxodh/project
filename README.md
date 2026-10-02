@@ -7,10 +7,14 @@ TypeScript + Vite + HTML5 Canvas로 만들었고, 외부 이미지 없이 캐릭
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173 에서 플레이
-npm run build      # 타입 검사 + dist/ 빌드
-npm run preview    # 빌드 결과 실행
+npm run dev           # http://localhost:5173 에서 플레이
+npm run build         # 타입 검사 + dist/ 빌드
+npm run preview       # 빌드 결과 실행
+npm run build:single  # 파일 하나짜리 게임 dist/fx-arena.html (내려받아 더블클릭으로 실행)
 ```
+
+`build:single`은 JS·CSS를 HTML 안에 넣은 단일 파일을 만듭니다. 브라우저는 `file://`로 연 페이지에서
+외부 모듈 스크립트를 막기 때문에, 서버 없이 파일만 공유·실행하려면 이 파일을 쓰세요.
 
 ## 조작
 
@@ -65,6 +69,7 @@ src/
   ui/overlays.ts         시작/일시 정지/게임 오버 화면(DOM)
 tests/                   Vitest 단위·시뮬레이션 테스트
 scripts/e2e.mjs          Playwright 브라우저 E2E 검증
+scripts/build-single.mjs 단일 HTML 파일 빌드
 ```
 
 ## 새 함수 무기 추가하기
@@ -101,6 +106,7 @@ npm run test:e2e     # 실제 브라우저에서 키보드·마우스 입력으�
 
 E2E를 처음 실행할 때 브라우저가 없다면 `npx playwright install chromium`을 먼저 실행하세요.
 이미 설치된 Chromium을 쓰려면 `CHROMIUM_PATH=/경로/chrome npm run test:e2e`.
+단일 파일 빌드를 검사하려면 `npm run build:single && E2E_URL=file://$PWD/dist/fx-arena.html node scripts/e2e.mjs`.
 
 - 단위 테스트: 5종 곡선 모양(직선/접선 출발 포물선/2회 진동/V 꼭짓점/지수 급상승), 360° 회전, 좌우 반전, 지형 절단,
   미리보기=발사 경로, 관통·중복 피해 방지·두께 경계·큰 스텝 누락 방지, 프레임 속도 독립성, 점프·숙이기·턱 아래 일어서기 불가,

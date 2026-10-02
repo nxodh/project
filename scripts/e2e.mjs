@@ -3,7 +3,7 @@
  *   npm run test:e2e
  * 빌드된 dist를 vite preview로 띄우고 ?debug 모드의 window.__fx로 상태를 읽는다.
  * 브라우저가 없으면 먼저: npx playwright install chromium
- * 환경 변수: CHROMIUM_PATH(브라우저 실행 파일), E2E_SHOTS(스크린샷 폴더)
+ * 환경 변수: CHROMIUM_PATH(브라우저 실행 파일), E2E_SHOTS(스크린샷 폴더), E2E_URL(검사할 주소)
  */
 import { chromium } from 'playwright';
 import { preview } from 'vite';
@@ -13,8 +13,9 @@ import { join } from 'node:path';
 
 const SP = process.env.E2E_SHOTS || join(tmpdir(), 'fx-arena-e2e');
 mkdirSync(join(SP, 'shots'), { recursive: true });
-const server = await preview({ preview: { port: 0, host: '127.0.0.1' }, logLevel: 'silent' });
-const URL = `${server.resolvedUrls.local[0]}?debug`;
+// E2E_URL을 주면 그 주소(예: file:///…/fx-arena.html)를 검사하고, 없으면 dist를 vite preview로 띄운다.
+const server = process.env.E2E_URL ? null : await preview({ preview: { port: 0, host: '127.0.0.1' }, logLevel: 'silent' });
+const URL = `${process.env.E2E_URL ?? server.resolvedUrls.local[0]}?debug`;
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -395,5 +396,5 @@ const failed = results.filter(r => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 console.log(`스크린샷: ${SP}/shots`);
 await browser.close();
-await server.close();
+await server?.close();
 process.exit(failed.length ? 1 : 0);
