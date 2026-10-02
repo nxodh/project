@@ -1,0 +1,294 @@
+import { ENEMIES, PLAYER, STEP } from '../config';
+import { approach, rectsOverlap } from '../core/geometry';
+import { randRange } from '../core/rng';
+import { Bullet } from '../entities/bullet';
+import type { Enemy } from '../entities/enemy';
+import type { LinkPlan, Surface } from '../world/navigation';
+import { bodyRect, canFitHeight, moveBody } from '../world/physics';
+import { damagePlayer } from './combat';
+import type { World } from './world';
+
+const CROUCH_RATIO = 0.6;
+
+/**
+ * 목표 지점(goalX, 목표 면)으로 이동한다. 같은 면이면 바로 걸어가고,
+ * 다른 면이면 내비게이션 그래프의 다음 면으로 점프하거나 가장자리에서 떨어진다.
+ */
+function steer(world: World, e: Enemy, goalX: number, goalSurfaceId: number, speed: number, stopDist: number): void {
+  const b = e.body;
+  const nav = world.nav;
+  if (!b.grounded) {
+    if (e.navJumpTargetX !== null) {
+      const dx = e.navJumpTargetX - b.x;
+      b.vx = Math.abs(dx) > 4 ? Math.sign(dx) * Math.max(speed, ENEMIES.airSpeed) : 0;
+    }
+    return;
+  }
+  e.navJumpTargetX = null;
+
+  const cur = nav.surfaceAt(b.x, b.y, b.w / 2);
+  if (cur) e.lastSurfaceId = cur.id;
+  const curId = cur ? cur.id : e.lastSurfaceId;
+
+  let moveX = goalX;
+  let tolerance = stopDist;
+  if (curId >= 0 && goalSurfaceId >= 0 && curId !== goalSurfaceId) {
+    // 최단 경로 후보 중 출발 지점이 가장 가까운 연결을 고른다.
+    const curS = nav.surface(curId);
+    let best: { plan: LinkPlan; next: Surface } | null = null;
+    for (const next of nav.candidateHops(curId, goalSurfaceId)) {
+      const plan = nav.planLink(curS, next, b.x, b.w / 2, goalX);
+      if (!plan) continue;
+      if (!best || Math.abs(plan.takeoffX - b.x) < Math.abs(best.plan.takeoffX - b.x)) best = { plan, next };
+    }
+    if (best) {
+      const { plan, next } = best;
+      tolerance = 6;
+      if (plan.kind === 'jump' && Math.abs(b.x - plan.takeoffX) < 9) {
+        b.vy = -ENEMIES.jumpVelocity;
+        e.navJumpTargetX = Math.min(Math.max(plan.landX, next.x1 + 20), next.x2 - 20);
+        b.vx = Math.sign(e.navJumpTargetX - b.x) * Math.max(speed, ENEMIES.airSpeed);
+        return;
+      }
+      moveX = plan.walkToX;
+    }
+  }
+
+  const dx = moveX - b.x;
+  if (Math.abs(dx) <= tolerance) {
+    b.vx = approach(b.vx, 0, 2000 * STEP);
+  } else {
+    b.vx = Math.sign(dx) * speed * (e.crouching ? 0.7 : 1);
+  }
+
+  // 같은 면 위에서 낮은 턱에 막혔다: 아래 틈이 있으면 숙여서 지나가고, 없으면 뛰어넘는다.
+  if (b.wallDir !== 0 && Math.sign(b.vx) === b.wallDir) {
+    const probe = { ...bodyRect(b, b.h * CROUCH_RATIO) };
+    probe.x += b.wallDir * 6;
+    if (!e.crouching && !world.arena.overlapsSolid(probe)) {
+      setEnemyCrouch(e, true);
+    } else if (!e.crouching) {
+      b.vy = -ENEMIES.jumpVelocity;
+      e.navJumpTargetX = b.x + b.wallDir * 90;
+    }
+  }
+}
+
+function setEnemyCrouch(e: Enemy, on: boolean): void {
+  if (e.crouching === on) return;
+  e.crouching = on;
+  e.crouchTimer = on ? 0.35 : 0;
+  e.body.h = on ? e.standHeight * CROUCH_RATIO : e.standHeight;
+}
+
+function playerTargetPoint(world: World): { x: number; y: number } {
+  const p = world.player;
+  // 서 있으면 가슴 높이, 숙였으면 숙인 몸 중앙을 노린다(조준 고정 후에 숙이면 피할 수 있다).
+  const h = p.crouching ? PLAYER.crouchHeight * 0.5 : PLAYER.standHeight - 30;
+  return { x: p.body.x, y: p.body.y - h };
+}
+
+function updateMelee(world: World, e: Enemy, dt: number): void {
+  const cfg = ENEMIES.melee;
+  const p = world.player;
+  const b = e.body;
+  const dx = p.body.x - b.x;
+  const pr = p.hurtbox();
+  const er = bodyRect(b);
+  const vertOverlap = pr.y < er.y + er.h && pr.y + pr.h > er.y;
+  const reach = cfg.attackRange * (e.elite ? 1.15 : 1);
+
+  switch (e.state) {
+    case 'chase': {
+      if (p.alive) e.facing = dx >= 0 ? 1 : -1;
+      if (p.alive && b.grounded && vertOverlap && Math.abs(dx) < reach + p.body.w / 2) {
+        e.state = 'windup';
+        e.stateTimer = cfg.windup;
+        b.vx = 0;
+        break;
+      }
+      if (p.alive) steer(world, e, p.body.x, p.lastSurfaceId, e.stats.speed, reach * 0.5);
+      else b.vx = approach(b.vx, 0, 2000 * dt);
+      break;
+    }
+    case 'windup':
+      b.vx = approach(b.vx, 0, 2400 * dt);
+      e.stateTimer -= dt;
+      if (e.stateTimer <= 0) {
+        e.state = 'strike';
+        e.stateTimer = cfg.strikeTime;
+        e.strikeHit = false;
+        b.vx = e.facing * 230;
+      }
+      break;
+    case 'strike': {
+      e.stateTimer -= dt;
+      if (!e.strikeHit) {
+        const h = b.h;
+        const box = {
+          x: e.facing > 0 ? b.x : b.x - reach - 14,
+          y: b.y - h * 0.9,
+          w: reach + 14,
+          h: h * 0.8,
+        };
+        if (rectsOverlap(box, p.hurtbox())) {
+          e.strikeHit = true;
+          damagePlayer(world, e.stats.damage, b.x);
+        }
+      }
+      if (e.stateTimer <= 0) {
+        e.state = 'recover';
+        e.stateTimer = cfg.recover;
+      }
+      break;
+    }
+    case 'recover':
+      b.vx = approach(b.vx, 0, 1800 * dt);
+      e.stateTimer -= dt;
+      if (e.stateTimer <= 0) e.state = 'chase';
+      break;
+  }
+}
+
+function updateRanged(world: World, e: Enemy, dt: number): void {
+  const cfg = ENEMIES.ranged;
+  const p = world.player;
+  const b = e.body;
+  const target = playerTargetPoint(world);
+  const hand = e.handPos();
+  const dx = target.x - b.x;
+  const dist = Math.hypot(target.x - hand.x, target.y - hand.y);
+  const sight = p.alive && !world.arena.blocked(hand.x, hand.y, target.x, target.y);
+  if (p.alive) e.facing = dx >= 0 ? 1 : -1;
+
+  const aimAt = (tx: number, ty: number) => {
+    const ax = tx - hand.x;
+    const ay = ty - hand.y;
+    const len = Math.hypot(ax, ay) || 1;
+    e.aim = { x: ax / len, y: ay / len };
+  };
+
+  switch (e.state) {
+    case 'move': {
+      e.fireTimer -= dt;
+      e.noSightTime = sight ? 0 : e.noSightTime + dt;
+      if (p.alive) aimAt(target.x, target.y);
+      if (!p.alive) {
+        b.vx = approach(b.vx, 0, 2000 * dt);
+        break;
+      }
+      const cur = world.nav.surfaceAt(b.x, b.y, b.w / 2);
+      const outOfRange = dist > cfg.maxFireDistance * 0.9;
+      if (e.noSightTime > 0.9 || outOfRange || !cur) {
+        // 시야가 막혔거나 사거리 밖: 플레이어가 있는 면 쪽으로 이동(현재 면에 갇혀 대치하지 않게)
+        steer(world, e, p.body.x - Math.sign(dx || 1) * cfg.preferredDistance * 0.5, p.lastSurfaceId, e.stats.speed, 40);
+      } else {
+        // 거리 유지: 너무 가까우면 물러나고, 멀면 다가간다(현재 면 안에서).
+        const side = dx >= 0 ? -1 : 1;
+        let desired = b.x;
+        const adx = Math.abs(dx);
+        if (adx < cfg.minDistance || adx > cfg.preferredDistance + 160) desired = p.body.x + side * cfg.preferredDistance;
+        desired = Math.min(Math.max(desired, cur.x1 + b.w), cur.x2 - b.w);
+        steer(world, e, desired, cur.id, e.stats.speed, 24);
+      }
+      if (sight && e.fireTimer <= 0 && dist < cfg.maxFireDistance && b.grounded) {
+        e.state = 'aim';
+        e.stateTimer = cfg.telegraph;
+        e.aimLocked = false;
+      }
+      break;
+    }
+    case 'aim': {
+      b.vx = approach(b.vx, 0, 2400 * dt);
+      e.stateTimer -= dt;
+      if (!e.aimLocked) {
+        aimAt(target.x, target.y);
+        if (e.stateTimer <= cfg.aimLockTime) e.aimLocked = true;
+      }
+      if (e.stateTimer <= 0) {
+        const muzzle = e.handPos();
+        world.bullets.push(
+          new Bullet(
+            muzzle.x,
+            muzzle.y,
+            e.aim.x * cfg.bulletSpeed,
+            e.aim.y * cfg.bulletSpeed,
+            cfg.bulletRadius,
+            e.stats.damage,
+            e.color,
+          ),
+        );
+        world.fx.sparks(muzzle.x, muzzle.y, e.color, 4, 160, e.aim.x, e.aim.y, 0.8);
+        e.state = 'recover';
+        e.stateTimer = 0.35;
+        e.fireTimer = e.stats.fireInterval * randRange(0.85, 1.2);
+      }
+      break;
+    }
+    case 'recover':
+      b.vx = approach(b.vx, 0, 2000 * dt);
+      e.stateTimer -= dt;
+      if (e.stateTimer <= 0) e.state = 'move';
+      break;
+  }
+}
+
+export function updateEnemies(world: World, dt: number): void {
+  for (const e of world.enemies) {
+    if (!e.alive) continue;
+    if (e.spawnTimer > 0) {
+      e.spawnTimer -= dt;
+      if (Math.random() < 0.5) world.fx.portal(e.body.x, e.body.y - e.body.h / 2, e.color);
+      continue;
+    }
+    e.flash = Math.max(0, e.flash - dt);
+    const b = e.body;
+
+    if (e.crouching) {
+      // 턱 아래로 들어갈 시간을 준 뒤, 머리 위가 비면 다시 일어선다.
+      e.crouchTimer -= dt;
+      if (e.crouchTimer <= 0 && canFitHeight(b, e.standHeight, world.arena)) setEnemyCrouch(e, false);
+    }
+
+    if (world.debug.freezeEnemies) {
+      b.vx = 0;
+    } else if (e.stun > 0) {
+      e.stun -= dt;
+      b.vx = approach(b.vx, 0, (b.grounded ? 1400 : 300) * dt);
+    } else if (e.kind === 'melee') {
+      updateMelee(world, e, dt);
+    } else {
+      updateRanged(world, e, dt);
+    }
+    moveBody(b, world.arena, dt);
+    if (b.grounded) {
+      const s = world.nav.surfaceAt(b.x, b.y, b.w / 2);
+      if (s) e.lastSurfaceId = s.id;
+      e.walkPhase += b.vx * dt * 0.05;
+    }
+    // 아레나 밖으로 튕겨 나가는 것을 막는 안전장치
+    if (b.y > world.arena.height + 200) e.alive = false;
+  }
+
+  // 겹친 적끼리 살짝 밀어내 겹쳐 보이지 않게 한다.
+  const list = world.enemies;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    if (!a.active) continue;
+    for (let j = i + 1; j < list.length; j++) {
+      const c = list[j];
+      if (!c.active) continue;
+      const dx = c.body.x - a.body.x;
+      const minDist = (a.body.w + c.body.w) * 0.45;
+      if (Math.abs(dx) >= minDist || Math.abs(c.body.y - a.body.y) > 30) continue;
+      const push = Math.min(40 * dt, (minDist - Math.abs(dx)) / 2);
+      const dir = dx === 0 ? (a.id < c.id ? 1 : -1) : Math.sign(dx);
+      const aMoved = { ...bodyRect(a.body), x: bodyRect(a.body).x - dir * push };
+      const cMoved = { ...bodyRect(c.body), x: bodyRect(c.body).x + dir * push };
+      if (!world.arena.overlapsSolid(aMoved)) a.body.x -= dir * push;
+      if (!world.arena.overlapsSolid(cMoved)) c.body.x += dir * push;
+    }
+  }
+
+  for (let i = list.length - 1; i >= 0; i--) if (!list[i].alive) list.splice(i, 1);
+}
