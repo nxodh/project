@@ -1,4 +1,4 @@
-import { PLAYER } from '../config';
+import { KEYS, PLAYER } from '../config';
 import { approach, type Vec2 } from '../core/geometry';
 import type { Input } from '../core/input';
 import type { Player } from '../entities/player';
@@ -38,8 +38,8 @@ export function updatePlayer(world: World, input: Input, dt: number): void {
     return;
   }
 
-  const intent = (input.isDown('KeyD') ? 1 : 0) - (input.isDown('KeyA') ? 1 : 0);
-  const wantCrouch = input.isDown('KeyS');
+  const intent = (input.isDown(KEYS.right) ? 1 : 0) - (input.isDown(KEYS.left) ? 1 : 0);
+  const wantCrouch = input.isDown(KEYS.crouch);
 
   // 숙이기: 바닥에 있을 때만. 머리 위가 막혀 있으면 키를 떼도 일어서지 못한다.
   if (wantCrouch && b.grounded) {
@@ -48,8 +48,8 @@ export function updatePlayer(world: World, input: Input, dt: number): void {
     setCrouch(p, false);
   }
 
-  // 점프: 입력 버퍼 + 코요테 타임, 키를 일찍 떼면 낮게 뛴다.
-  if (input.consumePress('KeyW')) p.jumpBuffer = PLAYER.jumpBuffer;
+  // 점프(Space): 입력 버퍼 + 코요테 타임, 키를 일찍 떼면 낮게 뛴다.
+  if (input.consumePress(KEYS.jump)) p.jumpBuffer = PLAYER.jumpBuffer;
   if (b.grounded) p.coyote = PLAYER.coyoteTime;
   else p.coyote = Math.max(0, p.coyote - dt);
   if (p.jumpBuffer > 0 && p.coyote > 0) {
@@ -63,7 +63,7 @@ export function updatePlayer(world: World, input: Input, dt: number): void {
     }
   }
   p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
-  if (p.jumpHeld && !input.isDown('KeyW')) {
+  if (p.jumpHeld && !input.isDown(KEYS.jump)) {
     if (b.vy < 0) b.vy *= PLAYER.jumpCutMultiplier;
     p.jumpHeld = false;
   }

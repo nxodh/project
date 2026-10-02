@@ -1,11 +1,11 @@
 :root {
   color-scheme: dark;
-  --bg: #03050a;
-  --panel: rgba(9, 13, 25, 0.92);
-  --line: rgba(140, 160, 210, 0.25);
-  --text: #e8eefc;
-  --dim: #8d9abb;
-  --accent: #3ad8ff;
+  --bg: #000000;
+  --panel: rgba(0, 0, 0, 0.92);
+  --line: rgba(255, 255, 255, 0.28);
+  --text: #ffffff;
+  --dim: #9a9a9a;
+  --accent: #ffffff;
   --font: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'NanumGothic', system-ui, sans-serif;
   --math: 'Cambria Math', 'STIX Two Math', 'Times New Roman', serif;
 }
@@ -48,7 +48,7 @@ body.playing #game {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(ellipse at center, rgba(3, 5, 10, 0.55), rgba(3, 5, 10, 0.85));
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.88));
   backdrop-filter: blur(2px);
   overflow: auto;
 }
@@ -63,7 +63,7 @@ body.playing #game {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel);
-  box-shadow: 0 0 40px rgba(58, 216, 255, 0.08);
+  box-shadow: 0 0 40px rgba(255, 255, 255, 0.06);
   text-align: center;
 }
 
@@ -79,7 +79,8 @@ body.playing #game {
 }
 
 .eyebrow.danger {
-  color: #ff5b6b;
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 h1 {
@@ -189,14 +190,20 @@ button:focus-visible {
 
 button.primary {
   min-width: 200px;
-  border-color: var(--accent);
-  background: rgba(58, 216, 255, 0.14);
-  box-shadow: 0 0 18px rgba(58, 216, 255, 0.2);
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #000000;
+}
+
+button.primary:hover,
+button.primary:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
 }
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin: 0 0 12px;
 }
@@ -220,7 +227,7 @@ button.primary {
 
 .best {
   margin: 0 0 18px;
-  color: #ffd23f;
+  color: #ffffff;
   font-size: 14px;
 }
 

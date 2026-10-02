@@ -75,6 +75,7 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
           maxHp: e.maxHp,
           state: e.state,
           active: e.active,
+          pending: e.pending.length,
           grounded: e.body.grounded,
           surface: e.lastSurfaceId,
         })),
@@ -89,10 +90,36 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
           hitIds: [...a.hitIds],
         })),
         bullets: w.bullets.length,
+        camera: { ...w.camera },
+        seed: w.seed,
+        enemyAttacks: w.enemyAttacks.map((a) => ({
+          id: a.id,
+          pattern: a.def.id,
+          phase: a.phase,
+          length: a.path.length,
+          blocked: a.path.blocked,
+          hitPlayer: a.hitIds.has(0),
+        })),
+        boss: w.boss
+          ? { hp: w.boss.hp, maxHp: w.boss.maxHp, phase: w.boss.bossPhase, state: w.boss.state, cast: w.boss.castName, active: w.boss.active }
+          : null,
+        bossesDefeated: w.stats.bossesDefeated,
       };
     },
-    worldToClient: (x: number, y: number) => view.worldToClient(x, y),
-    clientToWorld: (x: number, y: number) => view.clientToWorld(x, y),
+    /** 월드 좌표 → 브라우저 client 좌표(카메라 반영). */
+    worldToClient: (x: number, y: number) => view.viewToClient(x - game.world.camera.x, y - game.world.camera.y),
+    clientToWorld: (x: number, y: number) => game.world.viewToWorld(view.clientToView(x, y)),
+    /** 논리 화면 좌표 → 브라우저 client 좌표. */
+    viewToClient: (x: number, y: number) => view.viewToClient(x, y),
+    /** 카메라를 플레이어 위치로 즉시 맞춘다. */
+    snapCamera() {
+      game.world.updateTerrain();
+      game.world.updateCamera(0, true);
+    },
+    /** 다음 판부터 쓸 지형 시드(null이면 무작위). */
+    setTerrainSeed(seed: number | null) {
+      game.seed = seed;
+    },
     previewPath: (weaponIndex?: number) => serializePath(computeAttackPath(game.world, weaponIndex)),
     attackPath: (id: number) => {
       const a = game.world.attacks.find((x) => x.id === id);
@@ -104,6 +131,8 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
       b.y = y;
       b.vx = 0;
       b.vy = 0;
+      game.world.updateTerrain();
+      game.world.updateCamera(0, true);
     },
     setDebug(flags: Partial<{ freezeEnemies: boolean; invincible: boolean; noSpawn: boolean }>) {
       Object.assign(game.world.debug, flags);
@@ -117,6 +146,7 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
     clearEnemies() {
       game.world.enemies.length = 0;
       game.world.bullets.length = 0;
+      game.world.enemyAttacks.length = 0;
     },
     startWave: (n: number) => startWave(game.world, n),
     skipIntermission() {

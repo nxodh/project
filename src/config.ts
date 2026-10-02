@@ -3,13 +3,34 @@
  * 좌표 단위는 월드 픽셀(px), 시간 단위는 초(s)다.
  */
 
-/** 논리 해상도. 화면 크기와 무관하게 이 크기의 월드를 레터박스로 맞춰 그린다. */
-export const WORLD = { width: 1600, height: 900 } as const;
+/** 화면에 보이는 논리 해상도. 창 크기와 무관하게 이 크기를 레터박스로 맞춰 그린다. */
+export const VIEW = { width: 1600, height: 900 } as const;
 
 /** 고정 물리 스텝. 프레임 속도와 무관하게 같은 결과가 나오도록 이 간격으로만 시뮬레이션한다. */
 export const STEP = 1 / 120;
 /** 탭 전환 등으로 프레임이 크게 밀렸을 때 한 번에 따라잡을 최대 시간. */
 export const MAX_FRAME_DT = 0.25;
+
+/**
+ * 좌우로 무한히 이어지는 지형. chunkWidth 단위로 필요할 때 생성한다.
+ * 배경 좌표평면의 원점은 (originX, originY)이고 1눈금(unit)은 200px이다.
+ */
+export const TERRAIN = {
+  chunkWidth: 1600,
+  groundY: 820,
+  originX: 800,
+  originY: 460,
+  unit: 200,
+  /** 내비게이션 그래프를 만드는 범위: 플레이어가 있는 청크 기준 좌우 몇 청크. */
+  navChunkRadius: 2,
+} as const;
+
+export const CAMERA = {
+  /** 클수록 카메라가 플레이어를 빨리 따라간다(지수 감쇠 계수). */
+  followSharpness: 6,
+  /** 조준 방향으로 화면을 살짝 미리 보여 주는 거리. */
+  lookAhead: 120,
+} as const;
 
 export const PHYSICS = {
   gravity: 2200,
@@ -46,11 +67,20 @@ export const PLAYER = {
   waveHeal: 20,
 } as const;
 
+/** 조작 키(물리 키 코드). */
+export const KEYS = {
+  left: 'KeyA',
+  right: 'KeyD',
+  jump: 'Space',
+  crouch: 'KeyS',
+  pause: 'Escape',
+} as const;
+
 export const COMBAT = {
   /** 쿨다운 중 짧게 누른 클릭을 기억해 두는 시간(ms). */
   fireBufferMs: 180,
   /** 무기를 바꿔 가며 쏠 때도 적용되는 최소 발사 간격. */
-  globalFireInterval: 0.12,
+  globalFireInterval: 0.14,
   /**
    * 왼쪽을 조준하면 함수 그래프를 좌우 반전한다(캐릭터가 뒤돌아보는 것과 같음).
    * true: 어느 쪽을 보든 그래프의 수학적 '위(+y)'가 화면 위쪽으로 향한다.
@@ -65,13 +95,16 @@ export const COMBAT = {
   ghostTime: 0.3,
   /** 함수 곡선이 적 탄환을 지울 수 있는지. */
   curvesBlockBullets: true,
+  /** 공격 곡선이 화면 위·아래로 이 범위를 넘어가면 멈춘다(무한히 뻗지 않게). */
+  minY: -700,
+  maxY: 1000,
 } as const;
 
-/** 함수 무기 하나의 전투 수치. */
+/** 함수 무기(플레이어·적 공통) 하나의 전투 수치. */
 export interface WeaponTuning {
   /** 한 번 맞혔을 때의 피해량. */
   damage: number;
-  /** 같은 무기를 다시 쏠 수 있을 때까지의 시간. */
+  /** 같은 무기를 다시 쏠 수 있을 때까지의 시간(적 패턴에서는 사용하지 않음). */
   cooldown: number;
   /** 사거리 L: 조준축 방향으로 뻗는 길이(px). */
   range: number;
@@ -90,75 +123,62 @@ export interface WeaponTuning {
 }
 
 /**
- * 함수 무기 밸런스 테이블. 곡선 모양(정의역, 함수식)은 src/weapons/functions.ts에 있다.
+ * 플레이어 함수 무기 밸런스 테이블. 곡선 모양(정의역, 함수식)은 src/weapons/functions.ts에 있다.
+ * DPS(피해/대기)만 보면 비슷하게 맞추고, 대신 곡선 모양·두께·사거리로 쓰임새를 나눴다.
  */
 export const WEAPON_TUNING = {
-  linear: {
-    damage: 12,
-    cooldown: 0.17,
-    range: 980,
-    amplitude: 0,
-    speed: 4600,
-    hold: 0.05,
-    fade: 0.14,
-    hitRadius: 4,
-    knockback: 110,
-  },
-  quadratic: {
-    damage: 30,
-    cooldown: 0.6,
-    range: 560,
-    amplitude: 190,
-    speed: 1700,
-    hold: 0.14,
-    fade: 0.22,
-    hitRadius: 7,
-    knockback: 230,
-  },
-  sine: {
-    damage: 18,
-    cooldown: 0.36,
-    range: 620,
-    amplitude: 60,
-    speed: 1900,
-    hold: 0.12,
-    fade: 0.2,
-    hitRadius: 6,
-    knockback: 150,
-  },
-  abs: {
-    damage: 26,
-    cooldown: 0.95,
-    range: 380,
-    amplitude: 62,
-    speed: 1500,
-    hold: 0.2,
-    fade: 0.26,
-    hitRadius: 12,
-    knockback: 340,
-  },
-  exp: {
-    damage: 50,
-    cooldown: 0.85,
-    range: 340,
-    amplitude: 260,
-    speed: 1350,
-    hold: 0.14,
-    fade: 0.24,
-    hitRadius: 9,
-    knockback: 380,
-  },
+  // 너프: 피해 12→8, 대기 0.17→0.24, 사거리 980→720, 판정 4→3.5 (DPS 70 → 33)
+  linear: { damage: 8, cooldown: 0.24, range: 720, amplitude: 0, speed: 3600, hold: 0.05, fade: 0.14, hitRadius: 3.5, knockback: 90 },
+  quadratic: { damage: 24, cooldown: 0.65, range: 560, amplitude: 190, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
+  sine: { damage: 18, cooldown: 0.38, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
+  abs: { damage: 32, cooldown: 0.8, range: 420, amplitude: 62, speed: 1500, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 340 },
+  exp: { damage: 46, cooldown: 0.9, range: 340, amplitude: 260, speed: 1350, hold: 0.14, fade: 0.24, hitRadius: 9, knockback: 380 },
+  log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
+  reciprocal: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
+  circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 130, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
+  tan: { damage: 36, cooldown: 1.0, range: 460, amplitude: 220, speed: 1500, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
 } satisfies Record<string, WeaponTuning>;
 
-export interface EnemyStats {
+/**
+ * 적이 쓰는 함수 공격 패턴의 수치. 모양은 src/weapons/enemyPatterns.ts.
+ * 적 곡선은 예고선(점선)을 먼저 보여 준 뒤 발사되고, 플레이어보다 느리게 뻗어 피할 여지를 준다.
+ */
+export const ENEMY_PATTERN_TUNING = {
+  sineWave: { damage: 9, cooldown: 0, range: 720, amplitude: 46, speed: 640, hold: 0.25, fade: 0.25, hitRadius: 6, knockback: 0 },
+  lobArc: { damage: 11, cooldown: 0, range: 600, amplitude: 170, speed: 720, hold: 0.2, fade: 0.2, hitRadius: 7, knockback: 0 },
+  bossSine: { damage: 16, cooldown: 0, range: 1050, amplitude: 70, speed: 760, hold: 0.25, fade: 0.25, hitRadius: 8, knockback: 0 },
+  bossLob: { damage: 18, cooldown: 0, range: 700, amplitude: 260, speed: 820, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
+  bossRoof: { damage: 22, cooldown: 0, range: 760, amplitude: 150, speed: 950, hold: 0.25, fade: 0.25, hitRadius: 13, knockback: 0 },
+  bossExp: { damage: 24, cooldown: 0, range: 520, amplitude: 380, speed: 900, hold: 0.2, fade: 0.25, hitRadius: 10, knockback: 0 },
+  bossLine: { damage: 14, cooldown: 0, range: 1150, amplitude: 0, speed: 1250, hold: 0.15, fade: 0.2, hitRadius: 5, knockback: 0 },
+  bossTan: { damage: 20, cooldown: 0, range: 700, amplitude: 300, speed: 900, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
+} satisfies Record<string, WeaponTuning>;
+
+/** 적 머리 모양(흑백 화면에서 종류를 구분하는 표식). */
+export type HeadShape = 'filled' | 'square' | 'diamond' | 'triangle' | 'boss';
+
+interface EnemyBase {
   hp: number;
   speed: number;
   width: number;
   height: number;
   score: number;
+  /** 흑백 톤(회색 단계). */
   color: string;
+  head: HeadShape;
   /** 넉백 저항(1이면 그대로, 0.5면 절반만 밀림). */
   knockbackTaken: number;
+}
+
+/** 거리를 두고 공격하는 적(탄환/함수 곡선)의 공통 수치. */
+export interface CasterStats extends EnemyBase {
+  preferredDistance: number;
+  minDistance: number;
+  maxFireDistance: number;
+  fireInterval: number;
+  telegraph: number;
+  /** 발사 직전 이 시간 동안은 조준을 고정한다(숙이기/이동으로 피할 여지). */
+  aimLockTime: number;
 }
 
 export const ENEMIES = {
@@ -168,7 +188,8 @@ export const ENEMIES = {
     width: 26,
     height: 92,
     score: 100,
-    color: '#ff3b5c',
+    color: '#a6a6a6',
+    head: 'filled' as HeadShape,
     knockbackTaken: 1,
     attackRange: 50,
     windup: 0.38,
@@ -176,24 +197,79 @@ export const ENEMIES = {
     recover: 0.55,
     damage: 12,
   },
+  /** 일차함수 사수: 직선 탄환. */
   ranged: {
     hp: 30,
     speed: 120,
     width: 24,
     height: 90,
     score: 150,
-    color: '#ff8a3d',
+    color: '#8a8a8a',
+    head: 'square' as HeadShape,
     knockbackTaken: 1.15,
     preferredDistance: 430,
     minDistance: 290,
     maxFireDistance: 1000,
     fireInterval: 2.4,
     telegraph: 0.6,
-    /** 발사 직전 이 시간 동안은 조준을 고정한다(숙이기/이동으로 피할 여지). */
     aimLockTime: 0.22,
     bulletSpeed: 470,
     bulletRadius: 5,
     damage: 10,
+  },
+  /** 사인 술사: 사인파 곡선. */
+  sine: {
+    hp: 34,
+    speed: 110,
+    width: 24,
+    height: 90,
+    score: 180,
+    color: '#c8c8c8',
+    head: 'diamond' as HeadShape,
+    knockbackTaken: 1.1,
+    preferredDistance: 470,
+    minDistance: 300,
+    maxFireDistance: 760,
+    fireInterval: 3.2,
+    telegraph: 0.85,
+    aimLockTime: 0.3,
+  },
+  /** 포물선 투척병: 플레이어 위치에 떨어지는 포물선. 엄폐물 너머로도 닿는다. */
+  lobber: {
+    hp: 38,
+    speed: 105,
+    width: 26,
+    height: 88,
+    score: 200,
+    color: '#959595',
+    head: 'triangle' as HeadShape,
+    knockbackTaken: 1,
+    preferredDistance: 520,
+    minDistance: 320,
+    maxFireDistance: 820,
+    fireInterval: 3.4,
+    telegraph: 0.85,
+    aimLockTime: 0.35,
+  },
+  boss: {
+    hp: 2200,
+    speed: 120,
+    width: 50,
+    height: 176,
+    score: 3000,
+    color: '#ffffff',
+    head: 'boss' as HeadShape,
+    knockbackTaken: 0.06,
+    contactDamage: 15,
+    preferredDistance: 480,
+    /** 단계별(체력 비율 경계) 공격 간격과 예고 시간. */
+    phases: [
+      { above: 0.6, interval: 2.0, telegraph: 0.85 },
+      { above: 0.3, interval: 1.6, telegraph: 0.7 },
+      { above: 0, interval: 1.25, telegraph: 0.6 },
+    ],
+    /** 처치 시 체력 회복. */
+    heal: 40,
   },
   /** 적이 플랫폼을 오를 때 쓰는 점프 속도와 공중 이동 속도. */
   jumpVelocity: 900,
@@ -202,15 +278,24 @@ export const ENEMIES = {
   hitStun: 0.14,
   /** 생성 예고(포털) 시간. 이 동안은 공격하지 않고 피격되지 않는다. */
   spawnTelegraph: 0.7,
+  bossSpawnTelegraph: 1.6,
+  /** 플레이어에게서 이만큼 멀어진 적은 없애고 대기열로 되돌려 근처에서 다시 나오게 한다. */
+  despawnDistance: 2600,
 } as const;
 
 export const WAVES = {
   firstDelay: 2.0,
   intermission: 3.2,
   spawnInterval: 0.75,
-  /** 웨이브 n의 적 구성. */
-  meleeCount: (wave: number) => 2 + wave,
-  rangedCount: (wave: number) => 1 + Math.floor((wave - 1) / 2),
+  /** 이 간격마다 보스전. */
+  bossEvery: 5,
+  /** 웨이브 n의 적 구성(보스 웨이브 제외). */
+  meleeCount: (wave: number) => Math.min(9, 2 + wave),
+  rangedCount: (wave: number) => 1 + Math.floor((wave - 1) / 3),
+  sineCount: (wave: number) => (wave < 3 ? 0 : 1 + Math.floor((wave - 3) / 3)),
+  lobberCount: (wave: number) => (wave < 4 ? 0 : 1 + Math.floor((wave - 4) / 3)),
+  /** 보스 웨이브에 함께 나오는 부하. */
+  bossMinions: (wave: number) => ({ melee: 1 + wave / 5, sine: Math.min(2, wave / 5) }),
   /** 동시에 살아 있을 수 있는 최대 적 수. */
   maxAlive: (wave: number) => Math.min(10, 4 + wave),
   hpMultiplier: (wave: number) => 1 + 0.16 * (wave - 1),
@@ -218,11 +303,14 @@ export const WAVES = {
   damageMultiplier: (wave: number) => 1 + 0.06 * (wave - 1),
   fireIntervalMultiplier: (wave: number) => Math.max(0.55, 1 - 0.06 * (wave - 1)),
   scoreMultiplier: (wave: number) => 1 + 0.1 * (wave - 1),
+  /** n번째 보스의 체력 배율. */
+  bossHpMultiplier: (bossIndex: number) => 1 + 0.45 * (bossIndex - 1),
   /** 정예 적(체력·크기 증가) 등장 확률. */
   eliteChance: (wave: number) => (wave < 4 ? 0 : Math.min(0.35, 0.08 * (wave - 3))),
-  /** 스폰 위치 제약: 플레이어와의 최소 거리, 바로 위/아래로 판단하는 수평 거리. */
+  /** 스폰 위치 제약: 플레이어와의 최소 거리, 바로 위/아래로 판단하는 수평 거리, 최대 수평 거리. */
   minSpawnDistance: 300,
   noSpawnAboveHalfWidth: 140,
+  maxSpawnDistanceX: 1300,
 } as const;
 
 /** 한 번의 공격으로 여러 적을 처치했을 때 추가 점수(추가 처치 1명당). */
@@ -232,6 +320,7 @@ export const FX = {
   shakeHit: 2.0,
   shakeKill: 3.6,
   shakeHurt: 6.5,
-  shakeMax: 8,
+  shakeBoss: 7,
+  shakeMax: 9,
   shakeDecay: 9,
 } as const;

@@ -13,7 +13,7 @@ const byId = (id: string): FunctionWeaponDef => {
 };
 
 /** 지형이 없는 빈 아레나(곡선 형태만 확인). */
-const empty = new Arena([]);
+const empty = Arena.fixed([]);
 
 function slopes(ly: Float64Array, lx: Float64Array): number[] {
   const out: number[] = [];
@@ -22,8 +22,18 @@ function slopes(ly: Float64Array, lx: Float64Array): number[] {
 }
 
 describe('함수 무기 등록', () => {
-  it('5종이 1~5번 슬롯 순서로 등록되어 있다', () => {
-    expect(getWeapons().map((w) => w.id)).toEqual(['linear', 'quadratic', 'sine', 'abs', 'exp']);
+  it('9종이 1~9번 슬롯 순서로 등록되어 있다', () => {
+    expect(getWeapons().map((w) => w.id)).toEqual([
+      'linear',
+      'quadratic',
+      'sine',
+      'abs',
+      'exp',
+      'log',
+      'reciprocal',
+      'circle',
+      'tan',
+    ]);
   });
 
   it('모든 곡선은 유한한 정의역에서 원점(총구)에서 시작하고 촘촘하게 나뉜다', () => {
@@ -118,6 +128,46 @@ describe('곡선 형태', () => {
   });
 });
 
+describe('추가 함수 곡선 형태', () => {
+  const at = (id: string, t: number) => {
+    const w = byId(id);
+    const c = getLocalCurve(w);
+    let i = 0;
+    while (i < c.n - 1 && c.lx[i] < t * w.tuning.range) i++;
+    return c.ly[i] / w.tuning.amplitude;
+  };
+
+  it('로그함수: 총구 앞에서 급히 솟은 뒤 수평에 가깝게 뻗는다', () => {
+    expect(at('log', 0.1)).toBeGreaterThan(0.4);
+    expect(at('log', 1)).toBeCloseTo(1, 1);
+    const late = at('log', 1) - at('log', 0.7);
+    expect(late).toBeLessThan(0.12);
+  });
+
+  it('유리함수: 로그와 반대로 아래로 내리꽂은 뒤 낮게 깔린다', () => {
+    expect(at('reciprocal', 0.1)).toBeLessThan(-0.4);
+    expect(at('reciprocal', 1)).toBeCloseTo(-1, 1);
+    for (let t = 0.05; t < 1; t += 0.05) expect(at('reciprocal', t + 0.05)).toBeLessThanOrEqual(at('reciprocal', t) + 1e-6);
+  });
+
+  it('원(반원): 가운데에서 최고점, 양 끝에서 조준축으로 돌아오는 아치', () => {
+    expect(at('circle', 0.5)).toBeCloseTo(1, 1);
+    expect(Math.abs(at('circle', 1))).toBeLessThan(0.08);
+    expect(at('circle', 0.25)).toBeCloseTo(at('circle', 0.75), 1);
+    // 양 끝은 거의 수직: 처음 3% 구간에서 이미 25% 높이
+    expect(at('circle', 0.03)).toBeGreaterThan(0.25);
+  });
+
+  it('탄젠트: 시작과 끝은 가파르고 가운데는 완만한 Z자', () => {
+    const startRise = at('tan', 0.1) - at('tan', 0);
+    const midRise = at('tan', 0.55) - at('tan', 0.45);
+    const endRise = at('tan', 1) - at('tan', 0.9);
+    expect(startRise).toBeGreaterThan(3 * midRise);
+    expect(endRise).toBeGreaterThan(3 * midRise);
+    expect(at('tan', 0.5)).toBeCloseTo(0.5, 1);
+  });
+});
+
 describe('조준 좌표계와 회전', () => {
   it('오른쪽 조준: 로컬 +y(수학적 위)는 화면 위쪽(−y)', () => {
     const f = makeAimFrame({ x: 0, y: 0 }, { x: 1, y: 0 });
@@ -166,7 +216,7 @@ describe('조준 좌표계와 회전', () => {
 
 describe('지형 충돌로 곡선 자르기', () => {
   const wall: Solid = { kind: 'platform', walkable: false, x: 500, y: 0, w: 40, h: 900 };
-  const arena = new Arena([wall]);
+  const arena = Arena.fixed([wall]);
 
   it('곡선이 지형과 처음 만나는 지점에서 끊긴다', () => {
     const path = buildCurvePath(byId('linear'), makeAimFrame({ x: 100, y: 400 }, { x: 1, y: 0 }), arena);

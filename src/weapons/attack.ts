@@ -7,6 +7,9 @@ let nextAttackId = 1;
 
 export type AttackPhase = 'grow' | 'hold' | 'fade' | 'ghost' | 'done';
 
+/** 누가 쏜 곡선인지. 플레이어 곡선은 적을, 적 곡선은 플레이어를 맞힌다. */
+export type AttackOwner = 'player' | 'enemy';
+
 /**
  * 발사된 함수 공격 하나. 발사 순간 계산한 월드 경로를 그대로 보관하므로
  * 이후 플레이어나 마우스가 움직여도 곡선은 따라 움직이지 않는다.
@@ -16,7 +19,10 @@ export type AttackPhase = 'grow' | 'hold' | 'fade' | 'ghost' | 'done';
 export class CurveAttack {
   readonly id = nextAttackId++;
   readonly tuning: WeaponTuning;
-  readonly growTime: number;
+  /** 다 그려지는 데 걸리는 시간(상쇄로 끊기면 그 순간으로 줄어든다). */
+  growTime: number;
+  /** 다른 곡선에 끊긴 지점의 경로상 길이(끊기지 않았으면 null). */
+  cutLength: number | null = null;
   age = 0;
   /** 이 공격에 이미 맞은 적 id. 같은 발사로 같은 적을 두 번 때리지 않는다. */
   readonly hitIds = new Set<number>();
@@ -26,9 +32,11 @@ export class CurveAttack {
   constructor(
     readonly def: FunctionWeaponDef,
     readonly path: CurvePath,
+    readonly owner: AttackOwner = 'player',
+    tuningOverride: Partial<WeaponTuning> = {},
   ) {
-    // 발사 시점의 수치를 고정한다.
-    this.tuning = { ...def.tuning };
+    // 발사 시점의 수치를 고정한다(웨이브에 따른 적 피해량 배율 등은 override로 반영).
+    this.tuning = { ...def.tuning, ...tuningOverride };
     this.growTime = path.length / this.tuning.speed;
   }
 
@@ -54,7 +62,15 @@ export class CurveAttack {
 
   /** 곡선 머리(현재까지 그려진 끝)의 경로상 길이. */
   get headLength(): number {
+    if (this.cutLength !== null) return this.cutLength;
     return Math.min(this.path.length, this.age * this.tuning.speed);
+  }
+
+  /** 지금 머리 위치에서 곡선을 끊는다(더 뻗지 않고 곧바로 유지→사라짐 단계로). */
+  cut(): void {
+    if (this.cutLength !== null || this.phase !== 'grow') return;
+    this.cutLength = this.headLength;
+    this.growTime = this.age;
   }
 
   /** 곡선 꼬리의 경로상 길이. 사라지는 단계에서 앞으로 걷혀 올라간다. */

@@ -41,7 +41,8 @@ await page.evaluate(() => { __fx.setDebug({ noSpawn: true }); __fx.setSeed(3); }
 await sleep(400);
 
 // ── 이동
-let c = await toClient(1400, 500);
+// 화면 오른쪽 위(논리 화면 좌표)를 조준해 둔다(카메라가 움직여도 커서는 화면에 고정).
+let c = await page.evaluate(() => __fx.viewToClient(1450, 300));
 await page.mouse.move(c.x, c.y);
 s = await snap(); const x0 = s.player.x;
 await page.keyboard.down('KeyD'); await sleep(400); await page.keyboard.up('KeyD');
@@ -57,13 +58,13 @@ s = await snap(); check('A: 왼쪽 이동', s.player.x < x1 - 60, `${x1.toFixed(
 
 // ── 점프·착지
 s = await snap(); const gy = s.player.y;
-await page.keyboard.down('KeyW');
+await page.keyboard.down('Space');
 let minY = gy;
 for (let i = 0; i < 12; i++) { await sleep(40); const t = await snap(); minY = Math.min(minY, t.player.y); }
-await page.keyboard.up('KeyW');
+await page.keyboard.up('Space');
 await sleep(700);
 s = await snap();
-check('W: 점프 후 착지', gy - minY > 120 && s.player.grounded && Math.abs(s.player.y - gy) < 0.01, `최고 높이 ${(gy - minY).toFixed(0)}px`);
+check('Space: 점프 후 착지', gy - minY > 120 && s.player.grounded && Math.abs(s.player.y - gy) < 0.01, `최고 높이 ${(gy - minY).toFixed(0)}px`);
 
 // ── 숙이기
 s = await snap(); const hbStand = s.player.hurtbox.h;
@@ -89,13 +90,16 @@ s = await snap(); check('턱을 벗어나면 일어섬', !s.player.crouching, `x
 
 // ── 조준 정확도: 커서 위치 → 어깨→커서 방향
 async function aimAccuracy(label) {
-  const pts = [[200, 200], [1400, 150], [1300, 800], [100, 700], [800, 60]];
+  // 화면 안 여러 지점(논리 화면 좌표)을 조준하고, 측정 시점의 카메라로 기대 월드 좌표를 계산한다.
+  const viewPts = [[200, 200], [1400, 150], [1300, 780], [100, 700], [800, 60]];
   let worst = 0;
-  for (const [wx, wy] of pts) {
-    const cc = await toClient(wx, wy);
+  for (const [vx, vy] of viewPts) {
+    const cc = await page.evaluate(([x, y]) => __fx.viewToClient(x, y), [vx, vy]);
     await page.mouse.move(cc.x, cc.y);
     await sleep(40);
     const t = await snap();
+    const wx = vx + t.camera.x;
+    const wy = vy + t.camera.y;
     const back = await page.evaluate(([x, y]) => __fx.clientToWorld(x, y), [cc.x, cc.y]);
     const sh = t.player.shoulder;
     const ex = wx - sh.x, ey = wy - sh.y, el = Math.hypot(ex, ey);
@@ -111,7 +115,8 @@ await aimAccuracy('1280×720');
 await page.evaluate(() => { __fx.setTimeScale(0); __fx.setPlayer(800, 500); });
 await page.evaluate(() => __fx.step(5));
 let allEqual = true; let detail = '';
-for (let wi = 0; wi < 5; wi++) {
+const NW = await page.evaluate(() => __fx.world.weapons.length);
+for (let wi = 0; wi < NW; wi++) {
   await page.keyboard.press(`Digit${wi + 1}`);
   for (let deg = 0; deg < 360; deg += 45) {
     const t = await snap();
@@ -133,7 +138,7 @@ for (let wi = 0; wi < 5; wi++) {
     if (!same || last.weapon !== t2.player.weaponId) { allEqual = false; detail += `${wi}/${deg} `; }
   }
 }
-check('5종 × 8방향: 미리보기 경로 == 실제 공격 경로', allEqual, detail || '40/40 일치');
+check(`${NW}종 × 8방향: 미리보기 경로 == 실제 공격 경로`, allEqual, detail || `${NW * 8}/${NW * 8} 일치`);
 
 // 회전 시각 확인: 사인함수를 8방향으로 동시에
 await page.evaluate(() => { __fx.world.attacks.length = 0; });
@@ -172,8 +177,8 @@ await page.evaluate(() => { __fx.world.attacks.length = 0; });
 // ── 함수 교체: 숫자키, 휠
 await page.evaluate(() => __fx.setTimeScale(1));
 const idx = [];
-for (const k of ['Digit3', 'Digit5', 'Digit1', 'Digit4', 'Digit2']) { await page.keyboard.press(k); await sleep(60); idx.push((await snap()).player.weaponIndex); }
-check('숫자 1~5로 함수 교체', JSON.stringify(idx) === '[2,4,0,3,1]', JSON.stringify(idx));
+for (const k of ['Digit3', 'Digit9', 'Digit1', 'Digit7', 'Digit2']) { await page.keyboard.press(k); await sleep(60); idx.push((await snap()).player.weaponIndex); }
+check('숫자 1~9로 함수 교체', JSON.stringify(idx) === '[2,8,0,6,1]', JSON.stringify(idx));
 c = await toClient(1300, 500); await page.mouse.move(c.x, c.y);
 await page.mouse.wheel(0, 100); await sleep(150);
 const w1 = (await snap()).player.weaponIndex;
@@ -181,7 +186,7 @@ await page.mouse.wheel(0, 100); await sleep(150);
 const w2 = (await snap()).player.weaponIndex;
 await page.mouse.wheel(0, -100); await sleep(150);
 const w3 = (await snap()).player.weaponIndex;
-await page.keyboard.press('Digit5'); await sleep(60);
+await page.keyboard.press('Digit9'); await sleep(60);
 await page.mouse.wheel(0, 100); await sleep(150);
 const w4 = (await snap()).player.weaponIndex;
 check('마우스 휠로 함수 교체(순환)', w1 === 2 && w2 === 3 && w3 === 2 && w4 === 0, `${w1},${w2},${w3},${w4}`);
@@ -205,13 +210,14 @@ await page.mouse.down(); await sleep(1000); await page.mouse.up();
 const held = (Date.now() - t0) / 1000;
 await sleep(100);
 shots1 = (await snap()).shots;
-const expectN = held / 0.17;
-check('누르고 있으면 쿨다운 간격으로 연사 (일차함수 0.17s)', shots1 - shots0 >= Math.floor(expectN) - 1 && shots1 - shots0 <= Math.ceil(expectN) + 1, `${(held).toFixed(2)}s 동안 ${shots1 - shots0}발 (예상 ≈${expectN.toFixed(1)})`);
+const linCd = await page.evaluate(() => __fx.world.weapons[0].tuning.cooldown);
+const expectN = held / linCd;
+check(`누르고 있으면 쿨다운 간격으로 연사 (일차함수 ${linCd}s)`, shots1 - shots0 >= Math.floor(expectN) - 1 && shots1 - shots0 <= Math.ceil(expectN) + 1, `${(held).toFixed(2)}s 동안 ${shots1 - shots0}발 (예상 ≈${expectN.toFixed(1)})`);
 await page.keyboard.press('Digit4'); await sleep(1100);
 shots0 = (await snap()).shots;
 await page.mouse.down(); await sleep(1000); await page.mouse.up(); await sleep(100);
 shots1 = (await snap()).shots;
-check('절댓값함수는 대기시간이 길어 같은 시간에 적게 발사 (0.95s)', shots1 - shots0 === 2, `1초 동안 ${shots1 - shots0}발`);
+check('절댓값함수는 대기시간이 길어 같은 시간에 적게 발사 (0.8s)', shots1 - shots0 === 2, `1초 동안 ${shots1 - shots0}발`);
 
 // ── 실제 적 처치: 마우스로 조준해 클릭
 await sleep(1000);
@@ -260,7 +266,8 @@ for (let deg = 180; deg <= 260; deg += 2) {
   await page.evaluate(() => __fx.input.clearBufferedFire());
   await page.evaluate(() => { for (let i = 0; i < 90; i++) __fx.step(1); });
   const hp1 = (await snap()).enemies.find(e => e.id === eid2)?.hp;
-  check('지수 곡선이 끝에서 솟아 발판 위 적을 타격(같은 방향 직선은 닿지 않음)', hp1 === 450 && dl > 10, `각도 ${bestAng}°, 곡선 최소거리 ${bestD.toFixed(1)}px, 직선 최소거리 ${dl.toFixed(1)}px, hp 500 → ${hp1}`);
+  const expDmg = await page.evaluate(() => __fx.world.weapons[4].tuning.damage);
+  check('지수 곡선이 끝에서 솟아 발판 위 적을 타격(같은 방향 직선은 닿지 않음)', hp1 === 500 - expDmg && dl > 10, `각도 ${bestAng}°, 곡선 최소거리 ${bestD.toFixed(1)}px, 직선 최소거리 ${dl.toFixed(1)}px, hp 500 → ${hp1}`);
   // 다 그려진 상태를 캡처
   await page.mouse.down(); await page.evaluate(() => { const p = __fx.world.player; p.cooldowns.fill(0); p.globalCooldown = 0; __fx.step(1); }); await page.mouse.up();
   await page.evaluate(() => __fx.input.clearBufferedFire());
@@ -286,6 +293,71 @@ await page.screenshot({ path: `${SP}/shots/09-ai.png` });
 check('근접형: 플랫폼을 올라 플레이어에게 접근', meleeOnP3);
 check('원거리형: 직선 탄환 발사', sawBullet);
 check('적 공격으로 플레이어 피해 + 무적시간', s.player.hp < 100, `hp=${s.player.hp}`);
+
+// ── 적의 함수 곡선: 사인 술사가 예고선을 보인 뒤 사인파를 쏜다
+await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(1000, 820); __fx.setDebug({ invincible: true }); });
+await page.evaluate(() => __fx.spawn('sine', 1450, 820));
+let sawPreview = false; let sawEnemyCurve = false;
+for (let i = 0; i < 60 && !sawEnemyCurve; i++) {
+  await sleep(100);
+  const t = await snap();
+  if (t.enemies.some(e => e.kind === 'sine' && e.pending > 0)) {
+    sawPreview = true;
+    if (!sawEnemyCurve) await page.screenshot({ path: `${SP}/shots/09b-enemy-preview.png` });
+  }
+  if (t.enemyAttacks.some(a => a.pattern === 'e-sine')) sawEnemyCurve = true;
+}
+check('사인 술사: 예고선(점선) 표시 후 사인파 곡선 발사', sawPreview && sawEnemyCurve);
+
+// ── 무한 지형: 오른쪽으로 계속 달리면 카메라가 따라가고 새 지형이 나온다
+await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(1000, 820); __fx.setDebug({ noSpawn: true }); });
+const xStart = (await snap()).player.x;
+const camStart = (await snap()).camera.x;
+await page.keyboard.down('KeyD');
+for (let i = 0; i < 16; i++) { await page.keyboard.down('Space'); await sleep(140); await page.keyboard.up('Space'); await sleep(260); }
+await page.keyboard.up('KeyD');
+await sleep(500);
+s = await snap();
+check('무한 지형: 계속 달리면 카메라가 따라오고 다음 청크로 넘어감', s.player.x > xStart + 1200 && s.camera.x > camStart + 1000 && s.player.alive, `x ${xStart.toFixed(0)} → ${s.player.x.toFixed(0)}, 카메라 ${camStart.toFixed(0)} → ${s.camera.x.toFixed(0)}`);
+await aimAccuracy(`카메라 이동 후 x=${s.player.x.toFixed(0)}`);
+await page.evaluate(() => __fx.setPlayer(-6400, 820));
+await sleep(300);
+s = await snap();
+check('왼쪽(음수 좌표)으로도 지형이 이어진다', s.player.grounded && Math.abs(s.player.y - 820) < 0.01, `x=${s.player.x.toFixed(0)}`);
+await page.screenshot({ path: `${SP}/shots/09c-far-left.png` });
+
+// ── 보스 웨이브
+await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(520, 820); __fx.setDebug({ noSpawn: false, invincible: true }); __fx.startWave(5); });
+let bossSeen = null; let bossCast = new Set(); let bossCurves = 0;
+for (let i = 0; i < 90; i++) {
+  await sleep(100);
+  const t = await snap();
+  if (t.boss) { bossSeen = t.boss; if (t.boss.cast) bossCast.add(t.boss.cast); }
+  bossCurves = Math.max(bossCurves, t.enemyAttacks.filter(a => a.pattern.startsWith('b-')).length);
+  if (i === 45) await page.screenshot({ path: `${SP}/shots/09d-boss.png` });
+}
+check('5웨이브: 보스 등장 + HUD 보스 체력바', bossSeen !== null && bossSeen.maxHp > 0);
+check('보스가 여러 함수 패턴을 예고 후 시전', bossCast.size >= 2 && bossCurves >= 1, `패턴 ${[...bossCast].join(', ')} · 동시 곡선 최대 ${bossCurves}`);
+// 보스 처치: 탁 트인 바닥에서 보스를 조준해 마무리한다(체력 1로 낮춰 둠)
+await page.evaluate(() => {
+  __fx.world.enemyAttacks.length = 0;
+  __fx.setPlayer(1050, 820);
+  const b = __fx.world.boss;
+  if (b) { b.hp = 1; b.body.x = 1500; b.body.y = 820; b.pending = []; }
+  __fx.setDebug({ freezeEnemies: true });
+});
+c = await toClient((await snap()).enemies.find(e => e.kind === 'boss').x, 700);
+await page.keyboard.press('Digit1');
+for (let i = 0; i < 20 && (await snap()).boss; i++) {
+  const bx = (await snap()).enemies.find(e => e.kind === 'boss');
+  if (!bx) break;
+  const cc = await toClient(bx.x, 820 - bx.h * 0.6);
+  await page.mouse.move(cc.x, cc.y);
+  await page.mouse.click(cc.x, cc.y); await sleep(260);
+}
+s = await snap();
+check('보스 처치 → 보스 처치 수 증가', s.bossesDefeated === 1 && !s.boss, `bossesDefeated=${s.bossesDefeated}`);
+await page.evaluate(() => { __fx.clearEnemies(); __fx.setDebug({ invincible: false, noSpawn: true, freezeEnemies: false }); __fx.world.waves.queue.length = 0; });
 
 // ── 일시 정지 / 포커스 손실
 await page.keyboard.press('Escape'); await sleep(100);
@@ -379,10 +451,11 @@ await p2.evaluate(() => __fx.setDebug({ noSpawn: true }));
 const cv = await p2.evaluate(() => { const c = document.getElementById('game'); return { w: c.width, h: c.height, cw: c.clientWidth, ch: c.clientHeight }; });
 check('DPR 2: 캔버스 백버퍼가 화면 배율만큼 커짐', cv.w === cv.cw * 2 && cv.h === cv.ch * 2, JSON.stringify(cv));
 let worst = 0;
-for (const [wx, wy] of [[200, 200], [1400, 150], [1300, 800], [800, 60]]) {
-  const cc = await p2.evaluate(([x, y]) => __fx.worldToClient(x, y), [wx, wy]);
+for (const [vx, vy] of [[200, 200], [1400, 150], [1300, 780], [800, 60]]) {
+  const cc = await p2.evaluate(([x, y]) => __fx.viewToClient(x, y), [vx, vy]);
   await p2.mouse.move(cc.x, cc.y); await sleep(40);
   const t = await p2.evaluate(() => __fx.snapshot());
+  const wx = vx + t.camera.x, wy = vy + t.camera.y;
   const sh = t.player.shoulder; const ex = wx - sh.x, ey = wy - sh.y, el = Math.hypot(ex, ey);
   worst = Math.max(worst, Math.acos(Math.min(1, (t.player.aim.x * ex + t.player.aim.y * ey) / el)) * 180 / Math.PI);
 }

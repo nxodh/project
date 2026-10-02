@@ -1,4 +1,4 @@
-import { WORLD } from '../config';
+import { VIEW } from '../config';
 import type { Vec2 } from '../core/geometry';
 import type { View } from '../core/view';
 import type { World } from '../game/world';
@@ -7,25 +7,26 @@ import { PALETTE } from './colors';
 import { drawHud } from './hud';
 import {
   drawAttack,
-  drawBackground,
   drawBullets,
+  drawCoordinatePlane,
   drawCrosshair,
   drawEffects,
   drawEnemy,
+  drawEnemyAttack,
   drawPlayer,
   drawPreview,
   drawTerrain,
 } from './worldRenderer';
 
 export interface RenderFrame {
-  /** 마우스 커서의 월드 좌표(조준점). */
-  aim: Vec2;
+  /** 마우스 커서의 화면 좌표(조준점 표시 위치). */
+  aimView: Vec2;
   /** 조준 미리보기 경로(없으면 그리지 않음). */
   preview: CurvePath | null;
   previewReady: boolean;
   showCrosshair: boolean;
   showGameplayHud: boolean;
-  /** 배경 장식 애니메이션 시간(실시간). */
+  /** 실시간 경과(장식 애니메이션). */
   clock: number;
 }
 
@@ -44,6 +45,7 @@ export class Renderer {
   render(world: World, frame: RenderFrame): void {
     const ctx = this.ctx;
     const view = this.view;
+    const cam = world.camera;
 
     view.applyScreenTransform(ctx);
     ctx.globalAlpha = 1;
@@ -56,25 +58,28 @@ export class Renderer {
     const sx = sh > 0.05 ? (Math.random() - 0.5) * 2 * sh : 0;
     const sy = sh > 0.05 ? (Math.random() - 0.5) * 2 * sh : 0;
 
-    view.applyWorldTransform(ctx, sx, sy);
+    view.applyViewTransform(ctx, cam.x, cam.y, sx, sy);
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-20, -20, WORLD.width + 40, WORLD.height + 40);
+    ctx.rect(cam.x - 20, cam.y - 20, VIEW.width + 40, VIEW.height + 40);
     ctx.clip();
 
-    drawBackground(ctx, frame.clock);
-    drawTerrain(ctx, world.arena.solids);
+    drawCoordinatePlane(ctx, cam);
+    drawTerrain(ctx, world.arena.solidsIn(cam.x - 40, cam.x + VIEW.width + 40), cam);
 
-    if (frame.preview) drawPreview(ctx, frame.preview, world.currentWeapon, frame.previewReady);
+    if (frame.preview) drawPreview(ctx, frame.preview, frame.previewReady);
 
-    for (const e of world.enemies) drawEnemy(ctx, e, world);
+    const left = cam.x - 300;
+    const right = cam.x + VIEW.width + 300;
+    for (const e of world.enemies) if (e.body.x > left && e.body.x < right) drawEnemy(ctx, e, world);
     drawPlayer(ctx, world.player, world.currentWeapon, world.time);
     drawBullets(ctx, world);
+    for (const a of world.enemyAttacks) drawEnemyAttack(ctx, a);
     for (const a of world.attacks) drawAttack(ctx, a);
     drawEffects(ctx, world);
     ctx.restore();
 
-    view.applyWorldTransform(ctx);
+    view.applyViewTransform(ctx);
     drawHud(ctx, world, frame.showGameplayHud);
 
     if (frame.showCrosshair) {
@@ -82,7 +87,7 @@ export class Renderer {
       const def = world.currentWeapon;
       const cd = Math.max(p.cooldowns[p.weaponIndex], p.globalCooldown);
       const frac = def.tuning.cooldown > 0 ? Math.min(1, cd / def.tuning.cooldown) : 0;
-      drawCrosshair(ctx, frame.aim.x, frame.aim.y, def.color, frac);
+      drawCrosshair(ctx, frame.aimView.x, frame.aimView.y, frac);
     }
   }
 }

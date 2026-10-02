@@ -1,6 +1,6 @@
 import { COMBAT } from '../config';
 import type { Vec2 } from '../core/geometry';
-import type { Arena } from '../world/arena';
+import type { Arena, Solid } from '../world/arena';
 import type { FunctionWeaponDef } from './types';
 
 /** 로컬 좌표계의 곡선 샘플. lx는 조준 방향(전방), ly는 수학적 위쪽(+). 단위는 px. */
@@ -20,10 +20,15 @@ const cache = new Map<FunctionWeaponDef, { key: string; curve: LocalCurve }>();
  * 촘촘하게 샘플링한 뒤 곡선 길이 기준으로 일정 간격(sampleSpacing)으로 다시 나눠
  * 급하게 휘는 구간(지수함수 끝부분 등)도 선분이 길어지지 않게 한다.
  */
-export function computeLocalCurve(def: FunctionWeaponDef, spacing: number = COMBAT.sampleSpacing): LocalCurve {
+export function computeLocalCurve(
+  def: FunctionWeaponDef,
+  spacing: number = COMBAT.sampleSpacing,
+  range: number = def.tuning.range,
+): LocalCurve {
   const [x0, x1] = def.domain;
   const f0 = def.fn(x0);
-  const { range: L, amplitude: A } = def.tuning;
+  const L = range;
+  const A = def.tuning.amplitude;
 
   const fineY = new Float64Array(FINE_SAMPLES + 1);
   let yRef = 0;
@@ -63,9 +68,25 @@ export function computeLocalCurve(def: FunctionWeaponDef, spacing: number = COMB
   return { lx, ly, n, length };
 }
 
-/** 무기별 로컬 곡선(수치가 바뀌면 다시 계산). */
-export function getLocalCurve(def: FunctionWeaponDef): LocalCurve {
+const rangedCache = new Map<string, LocalCurve>();
+
+/**
+ * 무기별 로컬 곡선(수치가 바뀌면 다시 계산).
+ * range를 주면 그 사거리로 만든다(적의 포물선처럼 목표 거리에 맞춰 길이가 바뀌는 패턴). 10px 단위로 캐시한다.
+ */
+export function getLocalCurve(def: FunctionWeaponDef, range?: number): LocalCurve {
   const t = def.tuning;
+  if (range !== undefined && Math.abs(range - t.range) > 0.5) {
+    const r = Math.max(20, Math.round(range / 10) * 10);
+    const key = `${def.id}|${def.domain[0]}|${def.domain[1]}|${r}|${t.amplitude}|${COMBAT.sampleSpacing}`;
+    let c = rangedCache.get(key);
+    if (!c) {
+      c = computeLocalCurve(def, COMBAT.sampleSpacing, r);
+      if (rangedCache.size > 400) rangedCache.clear();
+      rangedCache.set(key, c);
+    }
+    return c;
+  }
   const key = `${def.domain[0]}|${def.domain[1]}|${t.range}|${t.amplitude}|${COMBAT.sampleSpacing}`;
   const hit = cache.get(def);
   if (hit && hit.key === key) return hit.curve;
@@ -139,8 +160,10 @@ export function buildCurvePath(
   frame: AimFrame,
   arena: Arena,
   guard?: Vec2,
+  range?: number,
+  blocks?: (s: Solid) => boolean,
 ): CurvePath {
-  const local = getLocalCurve(def);
+  const local = getLocalCurve(def, range);
   const xs = new Float64Array(local.n);
   const ys = new Float64Array(local.n);
   const cum = new Float64Array(local.n);
@@ -162,7 +185,7 @@ export function buildCurvePath(
     if (y > maxY) maxY = y;
   };
 
-  const guardHit = guard ? arena.raycast(guard.x, guard.y, frame.ox, frame.oy) : null;
+  const guardHit = guard ? arena.raycast(guard.x, guard.y, frame.ox, frame.oy, blocks) : null;
   if (guardHit) {
     push(guardHit.x, guardHit.y);
     blocked = true;
@@ -173,7 +196,7 @@ export function buildCurvePath(
       const wy = frame.oy + frame.fy * local.lx[i] + frame.ny * local.ly[i];
       const px = xs[count - 1];
       const py = ys[count - 1];
-      const hit = arena.raycast(px, py, wx, wy);
+      const hit = arena.raycast(px, py, wx, wy, blocks);
       if (hit) {
         if (hit.t > 0) push(hit.x, hit.y);
         blocked = true;

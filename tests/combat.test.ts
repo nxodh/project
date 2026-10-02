@@ -16,7 +16,7 @@ import { getWeapons } from '../src/weapons/registry';
 const STEP = 1 / 120;
 
 function makeWorld(): World {
-  const w = new World();
+  const w = new World(1);
   w.debug.noSpawn = true;
   return w;
 }
@@ -90,10 +90,10 @@ describe('곡선 충돌 판정', () => {
 
   it('아직 그려지지 않은 곡선 앞부분에는 판정이 없다', () => {
     const world = makeWorld();
-    const e = place(world, 'melee', 900, 820);
+    const e = place(world, 'melee', 600, 820);
     const path = buildCurvePath(linear(), makeAimFrame({ x: 100, y: 770 }, { x: 1, y: 0 }), world.arena);
     const a = new CurveAttack(linear(), path);
-    a.update(0.05); // 머리: 230px 지점 → 적(약 800px)에 아직 닿지 않음
+    a.update(0.05); // 머리: 180px 지점 → 적(약 500px)에 아직 닿지 않음
     expect(findCurveHit(a, e.hurtbox())).toBeNull();
     a.update(0.15); // 머리가 적을 지나감
     expect(findCurveHit(a, e.hurtbox())).not.toBeNull();
