@@ -1,8 +1,8 @@
-import { COMBAT, PLAYER } from '../config';
+import { COMBAT, EVOLUTION, PLAYER } from '../config';
 import type { Input } from '../core/input';
 import { CurveAttack } from '../weapons/attack';
 import { buildCurvePath, makeEndAlignedFrame, reachScale, type CurvePath } from '../weapons/curve';
-import { canOperate, type OperatorId } from '../weapons/operators';
+import { evolutionOptions, weaponById, type OperatorId } from '../weapons/operators';
 import type { World } from './world';
 
 /**
@@ -24,40 +24,43 @@ export function selectWeapon(world: World, index: number): void {
 }
 
 /**
- * 인벤토리: slot번 슬롯에 무기를 꽂는다. 이미 다른 슬롯에 있는 무기면 두 슬롯의 무기를 맞바꾼다.
- * 연산자를 붙일 수 없는 무기(원)가 들어가면 그 슬롯의 연산자는 떼어진다.
+ * 인벤토리: slot번 슬롯에 보유한 무기를 꽂는다. 이미 다른 슬롯에 있는 무기면 두 슬롯의 무기를 맞바꾼다.
  * 슬롯이 바뀌면 재사용 대기를 새 무기 기준으로 다시 시작해 교체로 대기시간을 건너뛰지 못하게 한다.
  */
 export function equipWeapon(world: World, slot: number, weaponId: string): boolean {
   const base = world.weapons.find((w) => w.id === weaponId);
   const target = world.loadout[slot];
-  if (!base || !target || target.weaponId === weaponId) return false;
+  if (!base || !target || target.weaponId === weaponId || !world.owned.has(weaponId)) return false;
   const other = world.loadout.findIndex((s) => s.weaponId === weaponId);
   if (other >= 0) {
     world.loadout[other].weaponId = target.weaponId;
-    fixOperator(world, other);
     resetSlotCooldown(world, other);
   }
   target.weaponId = weaponId;
-  fixOperator(world, slot);
   resetSlotCooldown(world, slot);
   return true;
 }
 
-/** 슬롯에 연산자를 붙이거나(null이면 뗀다). 붙일 수 없는 무기면 false. */
-export function setSlotOperator(world: World, slot: number, op: OperatorId | null): boolean {
-  const s = world.loadout[slot];
-  if (!s) return false;
-  if (op !== null && !canOperate(world.weapons.find((w) => w.id === s.weaponId)!)) return false;
-  if (s.op === op) return false;
-  s.op = op;
-  resetSlotCooldown(world, slot);
-  return true;
-}
+export type EvolveResult =
+  | { ok: true; unlocked: string }
+  | { ok: false; reason: 'not-owned' | 'no-result' | 'self' | 'already-owned' | 'no-points' };
 
-function fixOperator(world: World, slot: number): void {
-  const s = world.loadout[slot];
-  if (s.op && !canOperate(world.weapons.find((w) => w.id === s.weaponId)!)) s.op = null;
+/**
+ * 함수 진화: 보유한 함수 `fromId`에 연산(미분·부정적분·극한)을 적용해 그 결과 함수를 얻는다(원래 함수는 그대로 남는다).
+ * 진화 포인트를 쓰며, 결과가 없거나 자기 자신이거나 이미 가진 함수면 실패한다.
+ */
+export function evolveWeapon(world: World, fromId: string, op: OperatorId): EvolveResult {
+  const base = weaponById(fromId);
+  if (!base || !world.owned.has(fromId)) return { ok: false, reason: 'not-owned' };
+  const opt = evolutionOptions(base).find((o) => o.op === op)!;
+  if (!opt.edge || !opt.result) return { ok: false, reason: 'no-result' };
+  if (opt.self) return { ok: false, reason: 'self' };
+  if (world.owned.has(opt.result.id)) return { ok: false, reason: 'already-owned' };
+  const cost = EVOLUTION.cost[op];
+  if (world.evoPoints < cost) return { ok: false, reason: 'no-points' };
+  world.evoPoints -= cost;
+  world.owned.add(opt.result.id);
+  return { ok: true, unlocked: opt.result.id };
 }
 
 function resetSlotCooldown(world: World, slot: number): void {

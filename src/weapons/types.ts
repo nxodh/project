@@ -1,9 +1,18 @@
 import type { WeaponTuning } from '../config';
 
-/** 연산자(미분·부정적분)를 적용한 함수 하나: 해석적 식과 표시용 수식. */
-export interface OperatedFunction {
-  fn: (x: number) => number;
-  formula: string;
+/** 진화 연산자: 미분, 부정적분, 극한. */
+export type OperatorId = 'd' | 'int' | 'lim';
+
+/**
+ * 연산 결과(진화 간선). 결과 함수 `to`는 수학적으로 이 연산의 결과다(양의 상수배·덧셈 상수 C 차이는 무시).
+ * `to`가 자기 자신이면 그 연산으로는 새 함수를 얻지 못한다(예: (eˣ)′ = eˣ).
+ */
+export interface Evolution {
+  to: string;
+  /** 식으로 쓴 연산 결과(예: "(−x³)′ = −3x²"). */
+  math: string;
+  /** 극한 연산: n번째 항(수열·급수의 부분합)의 함수. n→∞이면 결과 함수로 수렴한다. */
+  series?: (x: number, n: number) => number;
 }
 
 /**
@@ -35,9 +44,11 @@ export interface FunctionWeaponDef {
    * 있으면 fn·domain 대신 이 곡선을 쓰고, 조준점은 총구에서 가장 먼 점이 된다.
    */
   trace?: (t: number) => { u: number; v: number };
-  /** 미분(f′)과 부정적분(∫f dx)의 해석적 식. 없으면 연산자를 장착할 수 없다. */
-  derivative?: OperatedFunction;
-  integral?: OperatedFunction;
-  /** 극한 연산자(x→∞ 방향으로 정의역을 넓히거나 점근선에 접근시킨 정의역). */
-  limitDomain?: readonly [number, number];
+  /**
+   * 기본 함수 여부. 기본 함수는 처음부터 가지고 있다: 다른 함수에서 미분·적분·극한으로 만들 수 없거나
+   * (원, eˣ) 같은 계보의 뿌리(일차·절댓값·탄젠트)이기 때문이다. 나머지는 진화로만 얻는다.
+   */
+  starter?: boolean;
+  /** 이 함수에 연산을 적용한 결과(진화 간선). 없는 연산은 결과가 인벤토리에 없는 함수다. */
+  evolves?: Partial<Record<OperatorId, Evolution>>;
 }

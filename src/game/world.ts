@@ -1,11 +1,10 @@
-import { CAMERA, FX, LOADOUT, PLAYER, VIEW } from '../config';
+import { CAMERA, EVOLUTION, FX, LOADOUT, PLAYER, VIEW } from '../config';
 import type { Vec2 } from '../core/geometry';
 import { Bullet } from '../entities/bullet';
 import { Effects } from '../entities/effects';
 import { Enemy, resetEnemyIds } from '../entities/enemy';
 import { Player } from '../entities/player';
 import { CurveAttack } from '../weapons/attack';
-import { resolveWeapon, type OperatorId } from '../weapons/operators';
 import { getWeapons } from '../weapons/registry';
 import type { FunctionWeaponDef } from '../weapons/types';
 import { Arena } from '../world/arena';
@@ -21,10 +20,9 @@ export interface Banner {
   duration: number;
 }
 
-/** 핫바 슬롯 하나: 어떤 무기를 꽂았고, 어떤 연산자가 붙어 있는가. */
+/** 핫바 슬롯 하나: 어떤 무기를 꽂았는가. */
 export interface LoadoutSlot {
   weaponId: string;
-  op: OperatorId | null;
 }
 
 export interface RunStats {
@@ -43,10 +41,14 @@ export interface RunStats {
 export class World {
   readonly arena: Arena;
   readonly nav: NavGraph;
-  /** 인벤토리에 있는 모든 함수 무기(카탈로그). */
+  /** 게임에 존재하는 모든 함수 무기(카탈로그). 플레이어가 가진 것은 `owned`뿐이다. */
   readonly weapons: readonly FunctionWeaponDef[] = getWeapons();
-  /** 핫바(숫자 키 1~N). 인벤토리 화면에서 무기와 연산자를 갈아 끼운다. */
-  readonly loadout: LoadoutSlot[] = LOADOUT.initial.slice(0, LOADOUT.slots).map((weaponId) => ({ weaponId, op: null }));
+  /** 보유한 함수. 기본 함수로 시작해 미분·적분·극한으로 진화시켜 늘린다. */
+  readonly owned = new Set<string>(getWeapons().filter((w) => w.starter).map((w) => w.id));
+  /** 진화 포인트(EP): 보스를 처치하면 얻고, 진화에 쓴다. */
+  evoPoints: number = EVOLUTION.startPoints;
+  /** 핫바(숫자 키 1~N). 인벤토리 화면에서 보유한 무기를 갈아 끼운다. */
+  readonly loadout: LoadoutSlot[] = LOADOUT.initial.slice(0, LOADOUT.slots).map((weaponId) => ({ weaponId }));
   readonly player: Player;
   readonly enemies: Enemy[] = [];
   /** 플레이어가 쏜 함수 곡선. */
@@ -122,12 +124,12 @@ export class World {
     this.banner = { title, subtitle, color, age: 0, duration };
   }
 
-  /** 슬롯에 꽂힌 무기(연산자가 붙어 있으면 적용된 정의). */
+  /** 슬롯에 꽂힌 무기. */
   slotWeapon(slot: number): FunctionWeaponDef {
     const s = this.loadout[slot];
     const base = this.weapons.find((w) => w.id === s.weaponId);
     if (!base) throw new Error(`알 수 없는 무기: ${s.weaponId}`);
-    return resolveWeapon(base, s.op);
+    return base;
   }
 
   /** 지금 선택된 슬롯의 무기. */

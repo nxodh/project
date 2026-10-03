@@ -5,7 +5,7 @@ import { setSeed } from '../src/core/rng';
 import { Bullet } from '../src/entities/bullet';
 import type { Enemy } from '../src/entities/enemy';
 import { findCurveHit, updateAttacks } from '../src/game/combat';
-import { computeAttackPath, equipWeapon, fireWeapon, selectWeapon, setSlotOperator } from '../src/game/weaponSystem';
+import { computeAttackPath, equipWeapon, fireWeapon, selectWeapon } from '../src/game/weaponSystem';
 import { spawnEnemy } from '../src/game/waves';
 import { World } from '../src/game/world';
 import { Arena } from '../src/world/arena';
@@ -20,6 +20,11 @@ function makeWorld(): World {
   const w = new World(1);
   w.debug.noSpawn = true;
   return w;
+}
+
+/** 모든 함수를 보유 상태로 만든다(진화 없이 시험하려고). */
+function unlockAll(world: World): void {
+  for (const w of world.weapons) world.owned.add(w.id);
 }
 
 function place(world: World, kind: 'melee' | 'ranged', x: number, y: number, hp = 1000): Enemy {
@@ -47,29 +52,27 @@ describe('선분-사각형 거리', () => {
 });
 
 describe('미리보기와 실제 발사', () => {
-  it('같은 위치·조준에서 미리보기 경로와 발사된 공격 경로가 완전히 같다 (8종 × 연산자 4가지 × 여러 방향·거리)', () => {
+  it('같은 위치·조준에서 미리보기 경로와 발사된 공격 경로가 완전히 같다 (21종 × 여러 방향·거리)', () => {
     const world = makeWorld();
+    unlockAll(world);
     world.player.body.x = 760;
     world.player.body.y = 500; // 중앙 발판 위
     for (const base of getWeapons()) {
       equipWeapon(world, 0, base.id);
-      for (const op of [null, 'd', 'int', 'lim'] as const) {
-        setSlotOperator(world, 0, op);
-        selectWeapon(world, 0);
-        for (let deg = 0; deg < 360; deg += 45) {
-          for (const dist of [90, 300, 900]) {
-            const th = (deg * Math.PI) / 180;
-            const s = world.player.shoulder();
-            updateAim(world.player, { x: s.x + Math.cos(th) * dist, y: s.y + Math.sin(th) * dist });
-            const preview = computeAttackPath(world);
-            world.player.cooldowns.fill(0);
-            world.player.globalCooldown = 0;
-            const attack = fireWeapon(world);
-            expect(attack.path.count).toBe(preview.count);
-            expect(Array.from(attack.path.xs.subarray(0, preview.count))).toEqual(Array.from(preview.xs.subarray(0, preview.count)));
-            expect(Array.from(attack.path.ys.subarray(0, preview.count))).toEqual(Array.from(preview.ys.subarray(0, preview.count)));
-            expect(attack.path.blocked).toBe(preview.blocked);
-          }
+      selectWeapon(world, 0);
+      for (let deg = 0; deg < 360; deg += 45) {
+        for (const dist of [90, 300, 900]) {
+          const th = (deg * Math.PI) / 180;
+          const s = world.player.shoulder();
+          updateAim(world.player, { x: s.x + Math.cos(th) * dist, y: s.y + Math.sin(th) * dist });
+          const preview = computeAttackPath(world);
+          world.player.cooldowns.fill(0);
+          world.player.globalCooldown = 0;
+          const attack = fireWeapon(world);
+          expect(attack.path.count).toBe(preview.count);
+          expect(Array.from(attack.path.xs.subarray(0, preview.count))).toEqual(Array.from(preview.xs.subarray(0, preview.count)));
+          expect(Array.from(attack.path.ys.subarray(0, preview.count))).toEqual(Array.from(preview.ys.subarray(0, preview.count)));
+          expect(attack.path.blocked).toBe(preview.blocked);
         }
       }
     }
@@ -78,39 +81,37 @@ describe('미리보기와 실제 발사', () => {
   /** 바닥만 있는 평지 월드(곡선이 발판에 가로막히지 않게 한다). */
   function flatWorld(): World {
     const world = makeWorld();
-    // 바닥을 아주 아래에 두어, 아래로 처지는 곡선(지수·미분 등)이 바닥에 걸려 끊기지 않게 한다.
+    // 바닥을 아주 아래에 두어, 아래로 처지는 곡선이 바닥에 걸려 끊기지 않게 한다.
     const ground = { kind: 'ground' as const, walkable: true, x: -1e6, y: 3000, w: 2e6, h: 300 };
     (world as unknown as { arena: Arena }).arena = Arena.fixed([ground]);
+    unlockAll(world);
     return world;
   }
 
-  it('적 위에 커서를 올리고 쏘면 맞는다: 모든 무기 × 연산자 × 거리 (곡선의 끝점이 커서에 닿는다)', () => {
+  it('적 위에 커서를 올리고 쏘면 맞는다: 21종 × 거리 (곡선의 끝점이 커서에 닿는다)', () => {
     const misses: string[] = [];
     for (const base of getWeapons()) {
-      for (const op of [null, 'd', 'int', 'lim'] as const) {
-        for (const dist of [200, 320]) {
-          const world = flatWorld();
-          const x0 = 200;
-          world.player.body.x = x0;
-          world.player.body.y = 600;
-          const e = place(world, 'melee', x0 + dist, 600);
+      for (const dist of [200, 320]) {
+        const world = flatWorld();
+        const x0 = 200;
+        world.player.body.x = x0;
+        world.player.body.y = 600;
+        const e = place(world, 'melee', x0 + dist, 600);
+        e.body.vx = 0;
+        equipWeapon(world, 0, base.id);
+        selectWeapon(world, 0);
+        updateAim(world.player, e.center());
+        const hp0 = e.hp;
+        world.player.cooldowns.fill(0);
+        world.player.globalCooldown = 0;
+        fireWeapon(world);
+        for (let i = 0; i < 600 && world.attacks.length; i++) {
+          e.body.x = x0 + dist;
+          e.body.y = 600;
           e.body.vx = 0;
-          equipWeapon(world, 0, base.id);
-          setSlotOperator(world, 0, op);
-          selectWeapon(world, 0);
-          updateAim(world.player, e.center());
-          const hp0 = e.hp;
-          world.player.cooldowns.fill(0);
-          world.player.globalCooldown = 0;
-          fireWeapon(world);
-          for (let i = 0; i < 600 && world.attacks.length; i++) {
-            e.body.x = x0 + dist;
-            e.body.y = 600;
-            e.body.vx = 0;
-            updateAttacks(world, STEP);
-          }
-          if (e.hp >= hp0) misses.push(`${base.id}/${op ?? '-'}@${dist}`);
+          updateAttacks(world, STEP);
         }
+        if (e.hp >= hp0) misses.push(`${base.id}@${dist}`);
       }
     }
     expect(misses).toEqual([]);
@@ -148,7 +149,7 @@ describe('곡선 충돌 판정', () => {
     const e = place(world, 'melee', 560, 820);
     e.body.vx = 0;
     world.player.body.x = 300;
-    selectWeapon(world, 3); // 절댓값: 두껍고 오래 유지
+    selectWeapon(world, 1); // 절댓값: 두껍고 오래 유지
     updateAim(world.player, { x: 700, y: 760 });
     fireWeapon(world);
     const hp0 = e.hp;
@@ -160,7 +161,7 @@ describe('곡선 충돌 판정', () => {
       e.body.vy = 0;
       updateAttacks(world, STEP);
     }
-    expect(hp0 - e.hp).toBe(getWeapons()[3].tuning.damage);
+    expect(hp0 - e.hp).toBe(getWeapons()[1].tuning.damage);
   });
 
   it('공격은 적을 관통해 경로 위의 여러 적을 각각 한 번씩 맞힌다', () => {

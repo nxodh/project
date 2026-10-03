@@ -176,12 +176,12 @@ export function makeAimFrame(
   return { ox: origin.x, oy: origin.y, fx, fy, nx, ny };
 }
 
-const ALIGN_MIN_RATIO = 0.2;
+const ALIGN_MIN_RATIO = 0.01;
 
 /**
  * 곡선의 조준점(끝점 또는 원의 먼 점)이 조준선(총구→커서) 위에 오도록 조준 좌표계를 돌린다.
  * 지수·로그·탄젠트처럼 끝이 조준축에서 멀리 벗어나는 함수도 '커서 쪽으로 뻗는다'는 느낌을 유지한다.
- * 조준점이 이미 축 위에 있거나 거의 그렇다(전방 길이의 20% 미만)면 돌리지 않는다: 직선·사인·포물선·원, 그리고 절댓값(돌리면 V자 꼭짓점이 더 깊어져 바닥에 걸린다).
+ * 조준점이 이미 축 위에 있으면(직선·사인·포물선·원·절댓값 등) 돌리지 않는다.
  * 미리보기와 발사가 모두 이 함수를 거치므로 두 경로는 여전히 같다.
  */
 export function makeEndAlignedFrame(def: FunctionWeaponDef, origin: Vec2, dir: Vec2, range?: number): AimFrame {

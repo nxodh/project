@@ -1,4 +1,4 @@
-import { COMBAT, ENEMIES, FX, MULTI_KILL_BONUS, PLAYER } from '../config';
+import { COMBAT, ENEMIES, EVOLUTION, FX, MULTI_KILL_BONUS, PLAYER } from '../config';
 import {
   closestPointOnSegment,
   segmentCircleHit,
@@ -188,12 +188,13 @@ function killEnemy(world: World, e: Enemy, a: CurveAttack, hit: CurveHit): void 
     const healed = Math.min(ENEMIES.boss.heal, p.maxHp - p.hp);
     p.hp += healed;
     world.stats.bossesDefeated++;
+    world.evoPoints += EVOLUTION.perBoss;
     // 보스가 남긴 곡선은 함께 사라진다.
     world.enemyAttacks.length = 0;
     for (let i = 0; i < 4; i++) world.fx.ring(e.body.x, e.body.y - e.body.h / 2, '#ffffff', 40 + i * 30, 0.5 + i * 0.15);
     world.fx.sparks(e.body.x, e.body.y - e.body.h / 2, '#ffffff', 40, 520);
     world.addShake(FX.shakeBoss);
-    world.showBanner('보스 격파!', `+${gained}점 · 체력 +${healed}`, '#ffffff', 2.6);
+    world.showBanner('보스 격파!', `+${gained}점 · 체력 +${healed} · 진화 포인트 +${EVOLUTION.perBoss} (E)`, '#ffffff', 2.8);
   }
 }
 

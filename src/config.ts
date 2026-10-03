@@ -83,20 +83,18 @@ export const KEYS = {
 /** 무기 인벤토리: 핫바 슬롯 수(숫자 키 1~N)와 시작 장비. */
 export const LOADOUT = {
   slots: 5,
-  /** 시작 때 슬롯에 들어 있는 무기 id (순서 = 슬롯 번호). */
-  initial: ['linear', 'quadratic', 'sine', 'abs', 'exp'],
+  /** 시작 때 슬롯에 들어 있는 무기 id (순서 = 슬롯 번호). 모두 처음부터 가진 기본 함수여야 한다. */
+  initial: ['linear', 'abs', 'exp', 'tan', 'circle'],
 } as const;
 
 /**
- * 연산자(인벤토리 아이템): 슬롯의 무기 함수에 미분·부정적분·극한을 적용한다. 모양은 수학 그대로 바뀌고 수치는 아래 배율로 바뀐다.
+ * 함수 진화: 미분·부정적분·극한 연산으로 보유한 함수에서 새 함수를 만든다(결과는 수학적으로 맞는 함수).
+ * 진화 포인트(EP)를 쓰며, 보스를 처치할 때마다 얻는다.
  */
-export const OPERATOR_TUNING = {
-  /** 미분 d/dx: 기울기를 쏜다 — 빠르고 날카롭지만 가볍다. */
-  d: { damage: 0.8, cooldown: 0.75, range: 1, speed: 1.5, hitRadius: 0.8 },
-  /** 부정적분 ∫dx: 넓이를 쌓는다 — 두껍고 묵직하지만 느리다. */
-  int: { damage: 1.3, cooldown: 1.3, range: 1, speed: 0.85, hitRadius: 1.5 },
-  /** 극한 lim: x→∞(또는 점근선)까지 정의역을 넓혀 멀리, 끝이 극단적으로 뻗는다. */
-  lim: { damage: 0.95, cooldown: 1.15, range: 1.35, speed: 1, hitRadius: 1 },
+export const EVOLUTION = {
+  startPoints: 3,
+  perBoss: 1,
+  cost: { d: 1, int: 1, lim: 2 },
 } as const;
 
 /** 커서까지의 거리에 맞춰 곡선을 줄이는 최소 비율(곡선의 끝점이 커서에 닿는다). */
@@ -153,15 +151,32 @@ export interface WeaponTuning {
  * DPS(피해/대기)만 보면 비슷하게 맞추고, 대신 곡선 모양·두께·사거리로 쓰임새를 나눴다.
  */
 export const WEAPON_TUNING = {
+  // ── 기본 함수(처음부터 보유): 계보의 뿌리이거나 다른 함수로 만들 수 없는 함수
   // 너프: 피해 12→8, 대기 0.17→0.24, 사거리 980→720, 판정 4→3.5 (DPS 70 → 33)
   linear: { damage: 8, cooldown: 0.24, range: 720, amplitude: 0, speed: 3600, hold: 0.05, fade: 0.14, hitRadius: 3.5, knockback: 90 },
-  quadratic: { damage: 24, cooldown: 0.65, range: 600, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
-  sine: { damage: 18, cooldown: 0.38, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
   abs: { damage: 32, cooldown: 0.8, range: 420, amplitude: 62, speed: 1500, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 340 },
   exp: { damage: 46, cooldown: 0.9, range: 340, amplitude: 260, speed: 1350, hold: 0.14, fade: 0.24, hitRadius: 9, knockback: 380 },
-  log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 170, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
   tan: { damage: 36, cooldown: 1.0, range: 460, amplitude: 220, speed: 1500, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
+  circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 170, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
+  // ── 다항함수 계보: 일차 →∫ 이차 →∫ 삼차 →∫ 사차
+  quadratic: { damage: 24, cooldown: 0.65, range: 600, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
+  cubic: { damage: 26, cooldown: 0.7, range: 540, amplitude: 170, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
+  quartic: { damage: 30, cooldown: 0.75, range: 560, amplitude: 180, speed: 1650, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
+  // ── 극한으로 만든 초월함수
+  expdecay: { damage: 20, cooldown: 0.5, range: 560, amplitude: 150, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 160 },
+  cosine: { damage: 16, cooldown: 0.34, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 140 },
+  sine: { damage: 18, cooldown: 0.38, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
+  log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
+  well: { damage: 30, cooldown: 0.8, range: 460, amplitude: 110, speed: 1400, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 320 },
+  // ── 미분·적분으로 만든 함수
+  negsine: { damage: 17, cooldown: 0.36, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
+  negcosine: { damage: 17, cooldown: 0.36, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
+  reciprocal: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
+  xlnx: { damage: 26, cooldown: 0.6, range: 520, amplitude: 150, speed: 1600, hold: 0.14, fade: 0.22, hitRadius: 8, knockback: 220 },
+  secsq: { damage: 34, cooldown: 0.9, range: 420, amplitude: 200, speed: 1300, hold: 0.16, fade: 0.24, hitRadius: 9, knockback: 280 },
+  neglncos: { damage: 30, cooldown: 0.8, range: 440, amplitude: 170, speed: 1400, hold: 0.16, fade: 0.24, hitRadius: 9, knockback: 260 },
+  sgn: { damage: 26, cooldown: 0.55, range: 420, amplitude: 120, speed: 1500, hold: 0.16, fade: 0.22, hitRadius: 10, knockback: 240 },
+  xabs: { damage: 28, cooldown: 0.7, range: 460, amplitude: 150, speed: 1600, hold: 0.14, fade: 0.22, hitRadius: 8, knockback: 230 },
 } satisfies Record<string, WeaponTuning>;
 
 /**

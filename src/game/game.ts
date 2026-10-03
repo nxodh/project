@@ -6,10 +6,9 @@ import type { View } from '../core/view';
 import type { Renderer } from '../render/renderer';
 import type { InventoryModel } from '../ui/inventory';
 import type { Overlays } from '../ui/overlays';
-import { canOperate } from '../weapons/operators';
 import { updateAim } from './playerSystem';
 import { stepWorld } from './simulation';
-import { canFire, computeAttackPath, equipWeapon, setSlotOperator } from './weaponSystem';
+import { canFire, computeAttackPath, equipWeapon, evolveWeapon } from './weaponSystem';
 import { World } from './world';
 
 export type GameState = 'title' | 'playing' | 'paused' | 'inventory' | 'gameover';
@@ -65,8 +64,9 @@ export class Game {
     ui.inventory.onEquip = (slot, id) => {
       if (equipWeapon(this.world, slot, id)) this.refreshInventory();
     };
-    ui.inventory.onOperator = (slot, op) => {
-      if (setSlotOperator(this.world, slot, op)) this.refreshInventory();
+    ui.inventory.onEvolve = (id, op) => {
+      const r = evolveWeapon(this.world, id, op);
+      if (r.ok) this.refreshInventory(r.unlocked);
     };
     ui.showStart();
   }
@@ -164,26 +164,16 @@ export class Game {
     this.ui.hideAll();
   }
 
-  private refreshInventory(): void {
-    if (this.state === 'inventory') this.ui.inventory.render(this.inventoryModel());
+  private refreshInventory(justUnlocked?: string): void {
+    if (this.state === 'inventory') this.ui.inventory.render(this.inventoryModel(), justUnlocked);
   }
 
   inventoryModel(): InventoryModel {
     const w = this.world;
     return {
-      slots: w.loadout.map((s, index) => ({
-        index,
-        def: w.slotWeapon(index),
-        baseId: s.weaponId,
-        op: s.op,
-        operable: canOperate(w.weapons.find((x) => x.id === s.weaponId)!),
-        current: index === w.player.weaponIndex,
-      })),
-      weapons: w.weapons.map((def) => ({
-        def,
-        slot: w.loadout.findIndex((s) => s.weaponId === def.id),
-        operable: canOperate(def),
-      })),
+      evoPoints: w.evoPoints,
+      slots: w.loadout.map((_s, index) => ({ index, def: w.slotWeapon(index), current: index === w.player.weaponIndex })),
+      weapons: w.weapons.map((def) => ({ def, owned: w.owned.has(def.id), slot: w.loadout.findIndex((s) => s.weaponId === def.id) })),
     };
   }
 

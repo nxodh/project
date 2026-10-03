@@ -3,7 +3,6 @@ import '../src/weapons/functions';
 import { COMBAT, REACH_MIN_SCALE } from '../src/config';
 import { getWeapons } from '../src/weapons/registry';
 import { buildCurvePath, getLocalCurve, makeAimFrame, makeEndAlignedFrame, reachScale, type CurvePath } from '../src/weapons/curve';
-import { canOperate, resolveWeapon } from '../src/weapons/operators';
 import { Arena, type Solid } from '../src/world/arena';
 import type { FunctionWeaponDef } from '../src/weapons/types';
 
@@ -23,8 +22,12 @@ function slopes(ly: Float64Array, lx: Float64Array): number[] {
 }
 
 describe('함수 무기 등록', () => {
-  it('8종이 인벤토리 카탈로그 순서대로 등록되어 있다', () => {
-    expect(getWeapons().map((w) => w.id)).toEqual(['linear', 'quadratic', 'sine', 'abs', 'exp', 'log', 'circle', 'tan']);
+  it('21종이 카탈로그 순서대로 등록되어 있고 기본 함수가 앞에 온다', () => {
+    expect(getWeapons().map((w) => w.id)).toEqual([
+      'linear', 'abs', 'exp', 'tan', 'circle',
+      'quadratic', 'cubic', 'quartic', 'expdecay', 'cosine', 'sine', 'log', 'well',
+      'negsine', 'negcosine', 'reciprocal', 'xlnx', 'secsq', 'neglncos', 'sgn', 'xabs',
+    ]);
   });
 
   it('모든 곡선은 유한한 정의역에서 원점(총구)에서 시작하고 촘촘하게 나뉜다', () => {
@@ -312,85 +315,5 @@ describe('커서에 맞춘 크기 (조준점 = 커서)', () => {
     const w = byId('exp');
     expect(reachScale(w, 99999)).toBe(1);
     expect(reachScale(w, 1)).toBe(REACH_MIN_SCALE);
-  });
-});
-
-describe('연산자(미분·부정적분·극한)', () => {
-  const sampled = (def: FunctionWeaponDef) => {
-    const c = getLocalCurve(def);
-    return { c, end: c.ly[c.n - 1] };
-  };
-
-  it('미분: 사인 → 코사인(처음엔 내려가고 정확히 한 파장 반마다 극값), 해석적 도함수를 쓴다', () => {
-    const d = resolveWeapon(byId('sine'), 'd');
-    expect(d.formula).toBe('y′ = cos x');
-    const { c } = sampled(d);
-    expect(c.ly[8]).toBeLessThan(0); // cos x − 1 ≤ 0: 아래로 시작
-    expect(Math.max(...Array.from(c.ly))).toBeCloseTo(0, 0);
-  });
-
-  it('부정적분: 사인 → −cos x + C (항상 0 이상인 두 개의 봉우리)', () => {
-    const i = resolveWeapon(byId('sine'), 'int');
-    expect(i.formula).toBe('y = −cos x + C');
-    const { c } = sampled(i);
-    expect(Math.min(...Array.from(c.ly))).toBeGreaterThanOrEqual(-1e-6);
-    let peaks = 0;
-    for (let k = 2; k < c.n - 1; k++) if (c.ly[k] > c.ly[k - 1] && c.ly[k] >= c.ly[k + 1] && c.ly[k] > 0.9 * i.tuning.amplitude) peaks++;
-    expect(peaks).toBe(2);
-  });
-
-  it('미분은 수학적으로 맞다: 해석적 도함수가 수치 미분과 일치한다(모든 무기)', () => {
-    for (const w of getWeapons()) {
-      if (!w.derivative || !w.integral) continue;
-      const [x0, x1] = w.domain;
-      for (let k = 1; k < 20; k++) {
-        const x = x0 + ((x1 - x0) * k) / 20;
-        const h = 1e-5;
-        const num = (w.fn(x + h) - w.fn(x - h)) / (2 * h);
-        const tol = Math.max(1e-3, Math.abs(num) * 1e-3);
-        if (w.id === 'abs' && Math.abs(x) < 1e-3) continue;
-        expect(Math.abs(w.derivative.fn(x) - num)).toBeLessThan(tol);
-        // 부정적분을 미분하면 원래 함수 f가 나온다
-        const f = (xx: number) => w.integral!.fn(xx);
-        const dnum = (f(x + h) - f(x - h)) / (2 * h);
-        const base = w.fn(x);
-        expect(Math.abs(dnum - base)).toBeLessThan(Math.max(2e-3, Math.abs(base) * 2e-3));
-      }
-    }
-  });
-
-  it('극한: 정의역이 넓어지고 사거리가 늘며, 수치 배율이 적용된다', () => {
-    const base = byId('sine');
-    const lim = resolveWeapon(base, 'lim');
-    expect(lim.domain[1]).toBeGreaterThan(base.domain[1]);
-    expect(lim.tuning.range).toBeGreaterThan(base.tuning.range);
-    expect(lim.tuning.damage).toBeLessThan(base.tuning.damage);
-    const exp = resolveWeapon(byId('exp'), 'lim');
-    // e^x가 x→6까지 가면 끝이 훨씬 가파르다(발산)
-    const ce = getLocalCurve(exp);
-    const sl = slopes(ce.ly, ce.lx);
-    const be = getLocalCurve(byId('exp'));
-    const sb = slopes(be.ly, be.lx);
-    expect(sl[sl.length - 1]).toBeGreaterThan(sb[sb.length - 1]);
-  });
-
-  it('미분은 빠르고 날카롭게, 적분은 두껍고 묵직하게 수치가 바뀐다', () => {
-    const base = byId('quadratic');
-    const d = resolveWeapon(base, 'd');
-    const i = resolveWeapon(base, 'int');
-    expect(d.tuning.cooldown).toBeLessThan(base.tuning.cooldown);
-    expect(d.tuning.speed).toBeGreaterThan(base.tuning.speed);
-    expect(d.tuning.hitRadius).toBeLessThan(base.tuning.hitRadius);
-    expect(i.tuning.damage).toBeGreaterThan(base.tuning.damage);
-    expect(i.tuning.hitRadius).toBeGreaterThan(base.tuning.hitRadius);
-    expect(i.tuning.cooldown).toBeGreaterThan(base.tuning.cooldown);
-  });
-
-  it('같은 조합은 같은 객체, 원에는 연산자를 붙일 수 없다', () => {
-    const s = byId('sine');
-    expect(resolveWeapon(s, 'd')).toBe(resolveWeapon(s, 'd'));
-    expect(canOperate(byId('circle'))).toBe(false);
-    expect(resolveWeapon(byId('circle'), 'd')).toBe(byId('circle'));
-    expect(resolveWeapon(s, null)).toBe(s);
   });
 });

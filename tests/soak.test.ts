@@ -5,7 +5,7 @@ import { random, setSeed } from '../src/core/rng';
 import { segmentRectDistance } from '../src/core/geometry';
 import { updateAim } from '../src/game/playerSystem';
 import { stepWorld } from '../src/game/simulation';
-import { computeAttackPath, equipWeapon, setSlotOperator } from '../src/game/weaponSystem';
+import { computeAttackPath, equipWeapon, evolveWeapon } from '../src/game/weaponSystem';
 import { World } from '../src/game/world';
 import { FakeInput } from './helpers';
 
@@ -33,11 +33,12 @@ function runSim(seed: number, smart: boolean, maxTime: number, invincible = fals
   const world = new World(seed);
   world.debug.invincible = invincible;
   const input = new FakeInput();
-  // 인벤토리를 실전처럼 구성한다: 원 + 미분·적분·극한 연산자를 모두 사용
-  equipWeapon(world, 4, 'circle');
-  setSlotOperator(world, 0, 'd');
-  setSlotOperator(world, 1, 'int');
-  setSlotOperator(world, 2, 'lim');
+  // 인벤토리를 실전처럼 구성한다: 진화로 이차·삼차·사차함수를 얻어 슬롯에 꽂는다(진화 포인트를 넉넉히 준다)
+  world.evoPoints = 10;
+  for (const [from, op] of [['linear', 'int'], ['quadratic', 'int'], ['cubic', 'int'], ['quadratic', 'lim']] as const) evolveWeapon(world, from, op);
+  equipWeapon(world, 0, 'quadratic');
+  equipWeapon(world, 2, 'cubic');
+  equipWeapon(world, 3, 'cosine');
   const usage = new Array<number>(world.loadout.length).fill(0);
   const lifetimes = new Map<number, number>();
   let maxLife = 0;
@@ -103,13 +104,13 @@ function runSim(seed: number, smart: boolean, maxTime: number, invincible = fals
   return { bosses: world.stats.bossesDefeated, px: world.player.body.x, py: world.player.body.y, wave: world.waves.wave, kills: world.kills, score: world.score, hp: world.player.hp, deathTime, usage, shots: world.stats.shots, hits: world.stats.hits, maxLife, multi: world.stats.bestMultiKill };
 }
 
-it('봇 2분 플레이(무적): 보스 웨이브가 멈추지 않고 이어지며 인벤토리의 여러 슬롯이 쓰인다', () => {
+it('봇 2분 플레이(무적): 보스 웨이브가 멈추지 않고 이어지며 진화로 얻은 함수를 포함해 여러 슬롯이 쓰인다', () => {
   const r = runSim(5, true, 150, true);
   // 보스가 90초 넘게 살아 있으면 어딘가 끼어 웨이브가 멈춘 것이다.
   expect(r.maxLife).toBeLessThan(90);
   expect(r.wave).toBeGreaterThanOrEqual(4);
   expect(r.bosses).toBeGreaterThanOrEqual(3);
-  // 봇은 매번 피해가 큰 슬롯을 고르므로 모든 슬롯을 쓰지는 않지만, 연산자가 붙은 슬롯을 포함해 여러 슬롯이 쓰인다.
+  // 봇은 매번 피해가 큰 슬롯을 고르므로 모든 슬롯을 쓰지는 않지만 여러 슬롯이 쓰인다.
   expect(r.usage.filter((u) => u > 0).length).toBeGreaterThanOrEqual(3);
   expect(Number.isFinite(r.px) && Number.isFinite(r.py)).toBe(true);
 }, 120000);

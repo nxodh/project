@@ -101,7 +101,7 @@ function drawSlots(ctx: CanvasRenderingContext2D, world: World): void {
   const n = world.loadout.length;
   const total = n * SLOT_W + (n - 1) * SLOT_GAP;
   const x0 = (VIEW.width - total) / 2;
-  world.loadout.forEach((slot, i) => {
+  world.loadout.forEach((_slot, i) => {
     const def = world.slotWeapon(i);
     const selected = i === p.weaponIndex;
     const x = x0 + i * (SLOT_W + SLOT_GAP);
@@ -133,21 +133,6 @@ function drawSlots(ctx: CanvasRenderingContext2D, world: World): void {
     ctx.fillText(String(i + 1), x + 6, y + 14);
     ctx.font = `bold 11px ${PALETTE.font}`;
     ctx.fillText(def.name, x + 17, y + 14);
-    if (slot.op) {
-      // 연산자 배지: 슬롯 오른쪽 위
-      const sym = slot.op === 'd' ? 'd/dx' : slot.op === 'int' ? '∫' : 'lim';
-      ctx.font = `italic bold 11px ${PALETTE.mathFont}`;
-      const bw = ctx.measureText(sym).width + 8;
-      roundRect(ctx, x + SLOT_W - bw - 4, y + 3, bw, 14, 4);
-      ctx.fillStyle = fg;
-      ctx.fill();
-      ctx.fillStyle = selected ? '#ffffff' : '#000000';
-      ctx.textAlign = 'center';
-      ctx.fillText(sym, x + SLOT_W - bw / 2 - 4, y + 14);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = fg;
-      ctx.font = `bold 11px ${PALETTE.font}`;
-    }
     drawFunctionIcon(ctx, def, x + 22, y + 20, SLOT_W - 44, 20, fg);
     ctx.font = `italic 12px ${PALETTE.mathFont}`;
     ctx.textAlign = 'center';
@@ -188,7 +173,7 @@ function drawControls(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = PALETTE.textDim;
   ctx.fillText('A/D 이동 · Space 점프 · S 숙이기', x, 846);
   ctx.fillText('마우스 조준 · 좌클릭 공격(누르면 연사)', x, 864);
-  ctx.fillText('1~5 / 휠 슬롯 · E 인벤토리 · Esc 일시 정지', x, 882);
+  ctx.fillText('1~5 / 휠 슬롯 · E 인벤토리·진화 · Esc 일시 정지', x, 882);
   ctx.textAlign = 'left';
 }
 
@@ -248,7 +233,7 @@ function drawTopBar(ctx: CanvasRenderingContext2D, world: World): void {
   ctx.fillStyle = PALETTE.textDim;
   const acc = world.stats.shots > 0 ? Math.round((world.stats.hits / world.stats.shots) * 100) : 0;
   ctx.fillText(`발사 ${world.stats.shots} · 명중 ${world.stats.hits} (${acc}%)`, VIEW.width - 30, y + 32);
-  if (world.stats.bossesDefeated > 0) ctx.fillText(`보스 처치 ${world.stats.bossesDefeated}`, VIEW.width - 30, y + 50);
+  ctx.fillText(`보스 처치 ${world.stats.bossesDefeated} · 진화 포인트 ${world.evoPoints}`, VIEW.width - 30, y + 50);
   ctx.textAlign = 'left';
 }
 

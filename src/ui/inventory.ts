@@ -1,23 +1,15 @@
+import { EVOLUTION } from '../config';
 import { getLocalCurve } from '../weapons/curve';
-import { OPERATORS, operatorInfo, type OperatorId } from '../weapons/operators';
-import type { FunctionWeaponDef } from '../weapons/types';
+import { evolutionOptions, operatorInfo } from '../weapons/operators';
+import type { FunctionWeaponDef, OperatorId } from '../weapons/types';
 
 /** 인벤토리 화면이 그릴 현재 상태(게임 쪽에서 만들어 넘긴다). */
 export interface InventoryModel {
-  slots: {
-    index: number;
-    /** 연산자가 적용된 최종 무기. */
-    def: FunctionWeaponDef;
-    baseId: string;
-    op: OperatorId | null;
-    /** 이 슬롯의 무기에 연산자를 붙일 수 있는가. */
-    operable: boolean;
-    current: boolean;
-  }[];
-  weapons: { def: FunctionWeaponDef; slot: number; operable: boolean }[];
+  evoPoints: number;
+  slots: { index: number; def: FunctionWeaponDef; current: boolean }[];
+  /** 게임에 존재하는 모든 함수. owned가 false면 아직 발견하지 못한 함수다. */
+  weapons: { def: FunctionWeaponDef; owned: boolean; slot: number }[];
 }
-
-type Selection = { kind: 'weapon' | 'op'; id: string } | null;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -77,73 +69,61 @@ function statLine(def: FunctionWeaponDef): string {
 }
 
 /**
- * 인벤토리 화면(DOM). 카드를 고른 뒤 슬롯을 누르거나, 카드를 슬롯으로 끌어다 놓아 무기와 연산자를 갈아 끼운다.
- * 상태 변경은 직접 하지 않고 onEquip/onOperator 콜백으로 게임에 맡기며, 게임이 render()로 다시 그린다.
+ * 인벤토리 화면(DOM): 핫바 장착과 함수 진화 작업대.
+ * 보유한 함수 카드를 고르면 작업대에 미분·부정적분·극한의 결과(수식과 결과 함수 모양)가 나오고,
+ * 진화 포인트를 써서 새 함수를 얻는다. 카드를 고른 뒤 슬롯을 누르거나 슬롯으로 끌어다 놓으면 장착된다.
+ * 상태 변경은 직접 하지 않고 onEquip/onEvolve 콜백으로 게임에 맡기며, 게임이 render()로 다시 그린다.
  */
 export class InventoryView {
   onEquip: (slot: number, weaponId: string) => void = () => {};
-  onOperator: (slot: number, op: OperatorId | null) => void = () => {};
+  onEvolve: (weaponId: string, op: OperatorId) => void = () => {};
   onClose: () => void = () => {};
 
   private readonly slotsEl = $('inv-slots');
   private readonly weaponsEl = $('inv-weapons');
-  private readonly opsEl = $('inv-ops');
-  private readonly detailEl = $('inv-detail');
-  private selection: Selection = null;
+  private readonly benchEl = $('inv-bench');
+  private readonly epEl = $('inv-ep');
+  private readonly countEl = $('inv-count');
+  private selected: string | null = null;
   private model: InventoryModel | null = null;
 
   constructor() {
     $('btn-inv-close').addEventListener('click', () => this.onClose());
-    this.renderOps();
   }
 
   /** 열 때마다 선택을 초기화한다. */
   open(model: InventoryModel): void {
-    this.selection = null;
+    this.selected = null;
     this.render(model);
   }
 
-  render(model: InventoryModel): void {
+  render(model: InventoryModel, justUnlocked?: string): void {
     this.model = model;
+    const sel = model.weapons.find((w) => w.def.id === this.selected);
+    if (!sel || !sel.owned) this.selected = null;
+    this.epEl.textContent = String(model.evoPoints);
+    this.countEl.textContent = `${model.weapons.filter((w) => w.owned).length} / ${model.weapons.length}`;
     this.renderSlots(model);
-    this.renderWeapons(model);
+    this.renderWeapons(model, justUnlocked);
+    this.renderBench();
     this.markSelection();
-    this.showDetail(null);
   }
 
-  private select(sel: Selection): void {
-    const same = this.selection && sel && this.selection.kind === sel.kind && this.selection.id === sel.id;
-    this.selection = same ? null : sel;
+  private select(id: string): void {
+    this.selected = this.selected === id ? null : id;
     this.markSelection();
-    this.showDetail(this.selection);
+    this.renderBench();
   }
 
   private markSelection(): void {
-    const sel = this.selection;
     for (const el of this.root().querySelectorAll<HTMLElement>('[data-card]')) {
-      el.classList.toggle('selected', !!sel && el.dataset.card === `${sel.kind}:${sel.id}`);
+      el.classList.toggle('selected', el.dataset.card === `weapon:${this.selected}`);
     }
-    this.root().classList.toggle('has-selection', !!sel);
+    this.root().classList.toggle('has-selection', !!this.selected);
   }
 
   private root(): HTMLElement {
     return $('overlay-inventory');
-  }
-
-  private showDetail(sel: Selection): void {
-    const m = this.model;
-    if (!sel || !m) {
-      this.detailEl.innerHTML =
-        '<p class="hint">카드를 눌러 고른 뒤 슬롯을 누르거나, 슬롯으로 끌어다 놓으세요. 연산자 칸을 다시 누르면 연산자가 떼어집니다.</p>';
-      return;
-    }
-    if (sel.kind === 'weapon') {
-      const w = m.weapons.find((x) => x.def.id === sel.id)!.def;
-      this.detailEl.innerHTML = `<b>${w.name}</b> <i>${w.formula}</i><p>${w.role}</p><p class="dim">${statLine(w)}</p>`;
-    } else {
-      const o = operatorInfo(sel.id as OperatorId);
-      this.detailEl.innerHTML = `<b>${o.name}</b> <i>${o.symbol}</i><p>${o.math}</p><p class="dim">${o.effect}</p>`;
-    }
   }
 
   private renderSlots(model: InventoryModel): void {
@@ -157,19 +137,11 @@ export class InventoryView {
         <canvas class="thumb"></canvas>
         <b>${s.def.name}</b>
         <i>${s.def.formula}</i>
-        <small>${statLine(s.def)}</small>
-        <button type="button" class="socket${s.op ? ' filled' : ''}${s.operable ? '' : ' locked'}" data-socket="${s.index}" tabindex="-1">${
-          s.op ? operatorInfo(s.op).symbol : s.operable ? '＋ 연산자' : '연산자 불가'
-        }</button>`;
+        <small>${statLine(s.def)}</small>`;
       this.slotsEl.appendChild(el);
       drawThumb(el.querySelector('canvas')!, s.def);
-      el.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('[data-socket]')) return;
-        this.dropOnSlot(s.index, this.selection);
-      });
-      el.querySelector('[data-socket]')!.addEventListener('click', () => {
-        if (this.selection?.kind === 'op') this.dropOnSlot(s.index, this.selection);
-        else if (s.op) this.onOperator(s.index, null);
+      el.addEventListener('click', () => {
+        if (this.selected) this.onEquip(s.index, this.selected);
       });
       el.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -180,59 +152,78 @@ export class InventoryView {
         e.preventDefault();
         el.classList.remove('drop');
         const [kind, id] = (e.dataTransfer?.getData('text/plain') ?? '').split(':');
-        if (kind === 'weapon' || kind === 'op') this.dropOnSlot(s.index, { kind, id });
+        if (kind === 'weapon' && id) this.onEquip(s.index, id);
       });
     }
   }
 
-  private dropOnSlot(slot: number, sel: Selection): void {
-    if (!sel) return;
-    if (sel.kind === 'weapon') this.onEquip(slot, sel.id);
-    else this.onOperator(slot, sel.id as OperatorId);
-    this.selection = null;
-  }
-
-  private card(kind: 'weapon' | 'op', id: string, html: string, def?: FunctionWeaponDef): HTMLElement {
-    const el = document.createElement('div');
-    el.className = 'inv-card';
-    el.dataset.card = `${kind}:${id}`;
-    el.draggable = true;
-    el.innerHTML = html;
-    if (def) drawThumb(el.querySelector('canvas')!, def);
-    el.addEventListener('click', () => this.select({ kind, id }));
-    el.addEventListener('mouseenter', () => {
-      if (!this.selection) this.showDetail({ kind, id });
-    });
-    el.addEventListener('mouseleave', () => {
-      if (!this.selection) this.showDetail(null);
-    });
-    el.addEventListener('dragstart', (e) => {
-      e.dataTransfer?.setData('text/plain', `${kind}:${id}`);
-      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
-    });
-    return el;
-  }
-
-  private renderWeapons(model: InventoryModel): void {
+  private renderWeapons(model: InventoryModel, justUnlocked?: string): void {
     this.weaponsEl.innerHTML = '';
     for (const w of model.weapons) {
-      const tag = w.slot >= 0 ? `<em>슬롯 ${w.slot + 1}</em>` : '';
-      const el = this.card(
-        'weapon',
-        w.def.id,
-        `${tag}<canvas class="thumb"></canvas><b>${w.def.name}</b><i>${w.def.formula}</i>${w.operable ? '' : '<small>연산자 불가(매개변수 곡선)</small>'}`,
-        w.def,
-      );
+      const el = document.createElement('div');
+      if (!w.owned) {
+        el.className = 'inv-card locked';
+        el.dataset.locked = w.def.id;
+        el.innerHTML = '<span class="lock">?</span><b>미발견</b><small>미분·적분·극한으로 진화시켜 발견</small>';
+        this.weaponsEl.appendChild(el);
+        continue;
+      }
+      el.className = 'inv-card' + (w.def.id === justUnlocked ? ' new' : '');
+      el.dataset.card = `weapon:${w.def.id}`;
+      el.draggable = true;
+      const tag = w.slot >= 0 ? `<em>슬롯 ${w.slot + 1}</em>` : w.def.starter ? '<em>기본</em>' : '';
+      el.innerHTML = `${tag}<canvas class="thumb"></canvas><b>${w.def.name}</b><i>${w.def.formula}</i>`;
       this.weaponsEl.appendChild(el);
+      drawThumb(el.querySelector('canvas')!, w.def);
+      el.addEventListener('click', () => this.select(w.def.id));
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer?.setData('text/plain', `weapon:${w.def.id}`);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copyMove';
+      });
     }
   }
 
-  private renderOps(): void {
-    this.opsEl.innerHTML = '';
-    for (const o of OPERATORS) {
-      this.opsEl.appendChild(
-        this.card('op', o.id, `<span class="op-sym">${o.symbol}</span><b>${o.name}</b><small>${o.math}</small>`),
-      );
+  /** 진화 작업대: 고른 함수에 미분·부정적분·극한을 적용한 결과. */
+  private renderBench(): void {
+    const m = this.model;
+    const sel = m?.weapons.find((w) => w.def.id === this.selected);
+    if (!m || !sel) {
+      this.benchEl.innerHTML =
+        '<p class="hint">보유한 함수 카드를 누르면 <b>진화 작업대</b>가 열립니다. 슬롯을 누르면 그 함수가 장착됩니다. ' +
+        '미분·적분·극한의 결과는 수학적으로 맞는 함수이며, 보스를 처치하면 진화 포인트를 얻습니다. ' +
+        '<b>기본</b> 표시 함수는 다른 함수로 만들 수 없어(또는 계보의 뿌리라서) 처음부터 가지고 있습니다.</p>';
+      return;
+    }
+    const base = sel.def;
+    const rows = evolutionOptions(base)
+      .map((o) => {
+        const info = operatorInfo(o.op);
+        const owned = !!o.result && m.weapons.find((w) => w.def.id === o.result!.id)?.owned;
+        let state = '';
+        let btn = `<button type="button" class="evolve" data-evolve="${o.op}">진화 · EP ${o.cost}</button>`;
+        if (!o.edge || !o.result) {
+          state = '<span class="dim">이 연산의 결과는 도감에 없는 함수라 진화할 수 없다</span>';
+          btn = '<button type="button" class="evolve" disabled>없음</button>';
+        } else if (o.self) {
+          state = '<span class="dim">결과가 자기 자신이라 새 함수를 얻지 못한다</span>';
+          btn = '<button type="button" class="evolve" disabled>자기 자신</button>';
+        } else {
+          state = `<canvas class="thumb mini" data-result="${o.result.id}"></canvas><span><b>${o.result.name}</b> <i>${o.result.formula}</i></span>`;
+          if (owned) btn = '<button type="button" class="evolve" disabled>보유 중</button>';
+          else if (m.evoPoints < o.cost) btn = `<button type="button" class="evolve" disabled>EP 부족 (${o.cost})</button>`;
+        }
+        return `<div class="bench-row"><span class="op-sym">${info.symbol}</span><div class="bench-math">${o.edge?.math ?? info.math}</div><div class="bench-result">${state}</div>${btn}</div>`;
+      })
+      .join('');
+    this.benchEl.innerHTML = `<div class="bench-head"><b>${base.name}</b> <i>${base.formula}</i><span class="dim"> · ${base.role}</span></div>${rows}<p class="dim">${statLine(base)} · 진화 비용: 미분 ${EVOLUTION.cost.d}, 적분 ${EVOLUTION.cost.int}, 극한 ${EVOLUTION.cost.lim} EP</p>`;
+    for (const o of evolutionOptions(base)) {
+      if (o.result && !o.self) {
+        const cv = this.benchEl.querySelector<HTMLCanvasElement>(`canvas[data-result="${o.result.id}"]`);
+        if (cv) drawThumb(cv, o.result);
+      }
+    }
+    for (const b of this.benchEl.querySelectorAll<HTMLButtonElement>('button[data-evolve]')) {
+      b.addEventListener('click', () => this.onEvolve(base.id, b.dataset.evolve as OperatorId));
     }
   }
 }

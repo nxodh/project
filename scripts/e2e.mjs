@@ -116,6 +116,7 @@ await page.evaluate(() => { __fx.setTimeScale(0); __fx.setPlayer(800, 500); });
 await page.evaluate(() => __fx.step(5));
 let allEqual = true; let detail = '';
 // 카탈로그의 모든 무기를 1번 슬롯에 꽂아 가며(연산자 없음) 시험한다
+await page.evaluate(() => __fx.unlockAll());
 const catalog = await page.evaluate(() => __fx.world.weapons.map(w => w.id));
 const NW = catalog.length;
 await page.keyboard.press('Digit1');
@@ -142,7 +143,7 @@ for (let wi = 0; wi < NW; wi++) {
   }
 }
 check(`${NW}종(1번 슬롯에 차례로 장착) × 8방향: 미리보기 경로 == 실제 공격 경로`, allEqual, detail || `${NW * 8}/${NW * 8} 일치`);
-await page.evaluate(() => { ['linear', 'quadratic', 'sine', 'abs', 'exp'].forEach((id, i) => __fx.equip(i, id)); });
+await page.evaluate(() => __fx.resetOwned());
 
 // 회전 시각 확인: 사인함수를 8방향으로 동시에
 await page.evaluate(() => { __fx.world.attacks.length = 0; });
@@ -197,84 +198,52 @@ check('마우스 휠로 함수 교체(순환)', w1 === 2 && w2 === 3 && w3 === 2
 const scrollY = await page.evaluate(() => window.scrollY + document.documentElement.scrollTop);
 check('휠 사용 중 페이지 스크롤 없음', scrollY === 0);
 
-// ── 인벤토리(E): 열면 게임이 멈추고, 카드 선택·클릭/드래그로 무기와 연산자를 갈아 끼운다
+// ── 인벤토리(E): 기본 함수 5종으로 시작하고, 진화 작업대에서 미분·적분·극한으로 새 함수를 얻는다
 await page.evaluate(() => { __fx.clearEnemies(); __fx.setDebug({ noSpawn: true }); __fx.setTimeScale(1); });
+const own0 = await page.evaluate(() => __fx.owned().sort());
+check('시작: 기본 함수 5종만 보유(일차·절댓값·지수·탄젠트·원)', JSON.stringify(own0) === JSON.stringify(['abs', 'circle', 'exp', 'linear', 'tan']), JSON.stringify(own0));
 await page.keyboard.press('KeyE'); await sleep(250);
 let st0 = await snap();
 check('E: 인벤토리 열림 + 게임 정지', st0.state === 'inventory' && await page.isVisible('#overlay-inventory'));
 const tInv = st0.time; await sleep(400);
 check('인벤토리 열려 있는 동안 시간 정지', Math.abs((await snap()).time - tInv) < 0.001);
+check('진화 포인트 3 표시, 미발견 함수는 ? 카드로 가려짐', (await page.textContent('#inv-ep')) === '3' && (await page.locator('[data-locked]').count()) === 16, `EP ${await page.textContent('#inv-ep')}, 잠김 ${await page.locator('[data-locked]').count()}`);
 await page.screenshot({ path: `${SP}/shots/13-inventory.png` });
-await page.click('[data-card="weapon:tan"]'); await page.click('[data-slot="0"]');
+await page.click('[data-card="weapon:linear"]');
+check('보유 함수를 고르면 진화 작업대에 미분·적분·극한 결과가 나온다', (await page.locator('.bench-row').count()) === 3 && (await page.textContent('#inv-bench')).includes('∫(−x) dx = −x²/2 + C'));
+check('일차함수 미분은 상수라 진화 불가(없음 버튼 비활성)', await page.locator('button[data-evolve="d"]').count() === 0 && (await page.locator('.bench-row').first().locator('button').isDisabled()));
+await page.click('button[data-evolve="int"]');
+let own1 = await page.evaluate(() => ({ owned: __fx.owned(), ep: __fx.evoPoints() }));
+check('∫ 진화: 일차함수 → 이차함수 획득, 진화 포인트 1 소모(일차는 그대로)', own1.owned.includes('quadratic') && own1.owned.includes('linear') && own1.ep === 2, JSON.stringify(own1));
+check('새 함수 카드가 도감에 나타난다', (await page.locator('[data-card="weapon:quadratic"]').count()) === 1 && (await page.locator('[data-locked]').count()) === 15);
+await page.click('[data-card="weapon:exp"]');
+check('지수함수는 미분·적분해도 자기 자신이라 진화 불가', (await page.locator('.bench-row button:disabled').allTextContents()).filter(t => t === '자기 자신').length === 2);
+await page.click('[data-card="weapon:abs"]');
+await page.click('button[data-evolve="lim"]');
+own1 = await page.evaluate(() => ({ owned: __fx.owned(), ep: __fx.evoPoints() }));
+check('lim 진화: 절댓값 → 우물(|x|ⁿ, n→∞), 진화 포인트 2 소모', own1.owned.includes('well') && own1.ep === 0, JSON.stringify(own1));
+check('포인트가 없으면 진화 버튼이 비활성(EP 부족)', (await page.locator('.bench-row button:disabled').allTextContents()).some(t => t.startsWith('EP 부족')));
+await page.screenshot({ path: `${SP}/shots/13b-inventory-evolved.png` });
+await page.click('[data-card="weapon:quadratic"]'); await page.click('[data-slot="1"]');
 let lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 카드를 고르고 슬롯을 눌러 무기 교체', lo[0].weaponId === 'tan', JSON.stringify(lo.map(l => l.weaponId)));
-await page.click('[data-card="op:d"]'); await page.click('[data-socket="0"]');
-lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 연산자 카드(미분)를 슬롯에 장착 → 수식이 도함수로', lo[0].op === 'd' && lo[0].formula === 'y′ = sec²x', JSON.stringify(lo[0]));
+check('인벤토리: 카드를 고르고 슬롯을 눌러 장착', lo[1].weaponId === 'quadratic' && lo[1].formula === 'y = −x²', JSON.stringify(lo.map(l => l.weaponId)));
 // 드롭 처리: 합성 DragEvent로 시험한다(헤드리스에서는 실제 마우스 드래그의 dragenter/dragover가 오지 않아 검증하지 못함)
 await page.evaluate(() => {
-  const dt = new DataTransfer(); dt.setData('text/plain', 'weapon:log');
-  const slot = document.querySelector('[data-slot="1"]');
+  const dt = new DataTransfer(); dt.setData('text/plain', 'weapon:well');
+  const slot = document.querySelector('[data-slot="3"]');
   slot.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
   slot.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
 });
 lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 슬롯에 카드 드롭(drop 이벤트 처리)', lo[1].weaponId === 'log', JSON.stringify(lo.map(l => l.weaponId)));
-await page.click('[data-card="weapon:circle"]'); await page.click('[data-slot="2"]');
-await page.click('[data-card="op:int"]'); await page.click('[data-socket="2"]');
-lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 원에는 연산자를 붙일 수 없다', lo[2].weaponId === 'circle' && lo[2].op === null, JSON.stringify(lo[2]));
-await page.click('[data-socket="0"]');
-lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 연산자 칸을 다시 누르면 떼어진다', lo[0].op === null);
-await page.screenshot({ path: `${SP}/shots/13b-inventory-equipped.png` });
+check('인벤토리: 슬롯에 카드 드롭(drop 이벤트 처리)', lo[3].weaponId === 'well', JSON.stringify(lo.map(l => l.weaponId)));
+check('미발견 함수는 슬롯에 넣을 수 없다', await page.evaluate(() => __fx.equip(0, 'sine')) === false);
+await page.screenshot({ path: `${SP}/shots/13c-inventory-equipped.png` });
 await page.keyboard.press('KeyE'); await sleep(250);
 check('E: 인벤토리 닫힘 → 게임 재개', (await snap()).state === 'playing' && !(await page.isVisible('#overlay-inventory')));
 await page.keyboard.press('KeyE'); await sleep(150); await page.keyboard.press('Escape'); await sleep(150);
 check('인벤토리에서 Esc: 닫고 재개', (await snap()).state === 'playing');
-// 이후 시험이 기본 장비를 기대하므로 되돌린다
-await page.evaluate(() => { ['linear', 'quadratic', 'sine', 'abs', 'exp'].forEach((id, i) => __fx.equip(i, id)); [0, 1, 2, 3, 4].forEach(i => __fx.setOperator(i, null)); });
-
-// HUD 즉시 갱신: 슬롯 강조 픽셀 확인(선택된 슬롯 테두리 색)
-await page.keyboard.press('Digit4'); await sleep(80);
-await page.screenshot({ path: `${SP}/shots/07-hud-slot4.png` });
-
-// ── 발사 간격: 단발 클릭 1회, 누르고 있으면 반복
-await page.keyboard.press('Digit1'); await sleep(300);
-let shots0 = (await snap()).shots;
-await page.mouse.click(c.x, c.y); await sleep(400);
-let shots1 = (await snap()).shots;
-check('좌클릭 한 번 = 한 번 공격', shots1 - shots0 === 1, `${shots1 - shots0}발`);
-await sleep(300);
-shots0 = (await snap()).shots;
-const t0 = Date.now();
-await page.mouse.down(); await sleep(1000); await page.mouse.up();
-const held = (Date.now() - t0) / 1000;
-await sleep(100);
-shots1 = (await snap()).shots;
-const linCd = await page.evaluate(() => __fx.world.weapons[0].tuning.cooldown);
-const expectN = held / linCd;
-check(`누르고 있으면 쿨다운 간격으로 연사 (일차함수 ${linCd}s)`, shots1 - shots0 >= Math.floor(expectN) - 1 && shots1 - shots0 <= Math.ceil(expectN) + 1, `${(held).toFixed(2)}s 동안 ${shots1 - shots0}발 (예상 ≈${expectN.toFixed(1)})`);
-await page.keyboard.press('Digit4'); await sleep(1100);
-shots0 = (await snap()).shots;
-await page.mouse.down(); await sleep(1000); await page.mouse.up(); await sleep(100);
-shots1 = (await snap()).shots;
-check('절댓값함수는 대기시간이 길어 같은 시간에 적게 발사 (0.8s)', shots1 - shots0 === 2, `1초 동안 ${shots1 - shots0}발`);
-
-// ── 실제 적 처치: 마우스로 조준해 클릭
-await sleep(1000);
-await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(300, 820); __fx.setDebug({ freezeEnemies: true }); });
-await sleep(100);
-const eid = await page.evaluate(() => __fx.spawn('melee', 560, 820));
-await page.keyboard.press('Digit1'); await sleep(50);
-c = await toClient(560, 770); await page.mouse.move(c.x, c.y);
-let killed = false;
-for (let i = 0; i < 12 && !killed; i++) {
-  await page.mouse.click(c.x, c.y); await sleep(230);
-  const t = await snap(); killed = !t.enemies.some(e => e.id === eid);
-}
-s = await snap();
-check('마우스로 조준·클릭해 근접형 적 처치 → 점수 증가', killed && s.kills === 1 && s.score > 0, `kills=${s.kills} score=${s.score}`);
+// 이후 시험이 기본 상태를 기대하므로 되돌린다
+await page.evaluate(() => __fx.resetOwned());
 
 // ── 적 AI: 근접형 접근·공격, 원거리형 사격
 await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(800, 500); __fx.setDebug({ freezeEnemies: false }); __fx.world.player.hp = 100; });
@@ -338,6 +307,7 @@ for (let i = 0; i < 90; i++) {
 }
 check('웨이브 시작: 보스 등장 + HUD 보스 체력바', bossSeen !== null && bossSeen.maxHp > 0);
 check('보스가 여러 함수 패턴을 예고 후 시전', bossCast.size >= 2 && bossCurves >= 1, `패턴 ${[...bossCast].join(', ')} · 동시 곡선 최대 ${bossCurves}`);
+const epBeforeBoss = await page.evaluate(() => __fx.evoPoints());
 // 보스 처치: 탁 트인 바닥에서 보스를 조준해 마무리한다(체력 1로 낮춰 둠)
 await page.evaluate(() => {
   __fx.world.enemyAttacks.length = 0;
@@ -356,7 +326,7 @@ for (let i = 0; i < 20 && (await snap()).bossesDefeated < 1; i++) {
   await page.mouse.click(cc.x, cc.y); await sleep(260);
 }
 s = await snap();
-check('보스 처치 → 보스 처치 수 증가', s.bossesDefeated >= 1, `bossesDefeated=${s.bossesDefeated} boss=${JSON.stringify(s.boss)} wave=${s.wave}`);
+check('보스 처치 → 보스 처치 수 증가 + 진화 포인트 획득', s.bossesDefeated >= 1 && (await page.evaluate(() => __fx.evoPoints())) >= epBeforeBoss + 1, `bossesDefeated=${s.bossesDefeated} boss=${JSON.stringify(s.boss)} wave=${s.wave}`);
 await page.evaluate(() => { __fx.clearEnemies(); __fx.setDebug({ invincible: false, noSpawn: true, freezeEnemies: false }); __fx.world.waves.queue.length = 0; });
 
 // ── 일시 정지 / 포커스 손실
@@ -422,42 +392,38 @@ const xa = s.player.x; await sleep(300);
 check('재시작: 이전 입력이 남지 않음', Math.abs((await snap()).player.x - xa) < 1);
 check('재시작 클릭이 공격으로 나가지 않음', (await snap()).shots === 0);
 
-// ── 커서를 적 위에 올리고 클릭하면 맞는다: 8종 × 연산자(없음·미분·적분·극한) × 거리 (곡선의 끝점이 커서에 닿는다)
-await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true, freezeEnemies: true, invincible: true }); __fx.clearEnemies(); __fx.useFlatArena(); __fx.setPlayer(400, 600); });
+// ── 커서를 적 위에 올리고 클릭하면 맞는다: 21종 × 거리 (곡선의 끝점이 커서에 닿는다)
+await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true, freezeEnemies: true, invincible: true }); __fx.clearEnemies(); __fx.unlockAll(); __fx.useFlatArena(); __fx.setPlayer(400, 600); });
 {
   const ids = await page.evaluate(() => __fx.world.weapons.map(w => w.id));
   const misses = []; let combos = 0;
   for (const id of ids) {
-    for (const op of [null, 'd', 'int', 'lim']) {
-      const ok = await page.evaluate(([id, op]) => { __fx.equip(0, id); __fx.setOperator(0, null); return op ? __fx.setOperator(0, op) : true; }, [id, op]);
-      if (!ok) continue; // 원은 연산자를 붙일 수 없다
-      for (const dist of [260, 340]) {
-        const eid = await page.evaluate((d) => {
-          const w = __fx.world; w.enemies.length = 0; w.attacks.length = 0;
-          const p = w.player; p.body.x = 400; p.body.y = 600; p.body.vx = 0; p.body.vy = 0;
-          p.cooldowns.fill(0); p.globalCooldown = 0; p.weaponIndex = 0;
-          return __fx.spawn('melee', 400 + d, 600, { hp: 100000 });
-        }, dist);
-        const cc = await toClient(400 + dist, 600 - 46);
-        await page.mouse.move(cc.x, cc.y);
-        await page.evaluate(() => __fx.step(1));
-        await page.mouse.down(); await page.evaluate(() => __fx.step(1)); await page.mouse.up();
-        await page.evaluate(() => __fx.input.clearBufferedFire());
-        const hp = await page.evaluate(([eid, d]) => {
-          const e = __fx.world.enemies.find(x => x.id === eid);
-          for (let i = 0; i < 240; i++) { e.body.x = 400 + d; e.body.y = 600; e.body.vx = 0; e.body.vy = 0; __fx.world.player.body.y = 600; __fx.world.player.body.vy = 0; __fx.step(1); }
-          return e.hp;
-        }, [eid, dist]);
-        combos++;
-        if (hp >= 100000) misses.push(`${id}/${op ?? '-'}@${dist}`);
-        if (id === 'circle' && dist === 260) { /* 아래에서 캡처 */ }
-      }
+    await page.evaluate((id) => { __fx.equip(0, id); }, id);
+    for (const dist of [260, 340]) {
+      const eid = await page.evaluate((d) => {
+        const w = __fx.world; w.enemies.length = 0; w.attacks.length = 0;
+        const p = w.player; p.body.x = 400; p.body.y = 600; p.body.vx = 0; p.body.vy = 0;
+        p.cooldowns.fill(0); p.globalCooldown = 0; p.weaponIndex = 0;
+        return __fx.spawn('melee', 400 + d, 600, { hp: 100000 });
+      }, dist);
+      const cc = await toClient(400 + dist, 600 - 46);
+      await page.mouse.move(cc.x, cc.y);
+      await page.evaluate(() => __fx.step(1));
+      await page.mouse.down(); await page.evaluate(() => __fx.step(1)); await page.mouse.up();
+      await page.evaluate(() => __fx.input.clearBufferedFire());
+      const hp = await page.evaluate(([eid, d]) => {
+        const e = __fx.world.enemies.find(x => x.id === eid);
+        for (let i = 0; i < 240; i++) { e.body.x = 400 + d; e.body.y = 600; e.body.vx = 0; e.body.vy = 0; __fx.world.player.body.y = 600; __fx.world.player.body.vy = 0; __fx.step(1); }
+        return e.hp;
+      }, [eid, dist]);
+      combos++;
+      if (hp >= 100000) misses.push(`${id}@${dist}`);
     }
   }
-  check('커서를 적 위에 올리고 클릭하면 맞는다(전 무기·연산자·거리)', misses.length === 0 && combos >= 50, `${combos}조합 · 실패 [${misses.join(', ')}]`);
+  check('커서를 적 위에 올리고 클릭하면 맞는다(21종 × 거리)', misses.length === 0 && combos === ids.length * 2, `${combos}조합 · 실패 [${misses.join(', ')}]`);
   // 원 공격 장면 캡처
   await page.evaluate(() => {
-    __fx.equip(0, 'circle'); __fx.setOperator(0, null);
+    __fx.equip(0, 'circle');
     const w = __fx.world; w.enemies.length = 0; w.attacks.length = 0;
     const p = w.player; p.body.x = 400; p.body.y = 600; p.cooldowns.fill(0); p.globalCooldown = 0; p.weaponIndex = 0;
     __fx.spawn('melee', 700, 600, { hp: 100000 });
@@ -467,7 +433,7 @@ await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true,
   await page.mouse.down(); await page.evaluate(() => __fx.step(1)); await page.mouse.up();
   await page.evaluate(() => { __fx.input.clearBufferedFire(); __fx.world.attacks.forEach(a => { a.age = a.growTime + 0.01; }); __fx.step(1); });
   await page.screenshot({ path: `${SP}/shots/14-circle.png` });
-  await page.evaluate(() => { ['linear', 'quadratic', 'sine', 'abs', 'exp'].forEach((id, i) => __fx.equip(i, id)); __fx.world.enemies.length = 0; __fx.world.attacks.length = 0; __fx.setTimeScale(1); __fx.newRun(); });
+  await page.evaluate(() => { __fx.world.enemies.length = 0; __fx.world.attacks.length = 0; __fx.setTimeScale(1); __fx.newRun(); });
 }
 
 // ── 화면 크기 변경 후 조준 정확도 + 조준점 위치(픽셀)

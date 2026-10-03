@@ -1,11 +1,12 @@
+import { LOADOUT } from './config';
 import { setSeed } from './core/rng';
 import type { Input } from './core/input';
 import type { View } from './core/view';
 import type { EnemyKind } from './entities/enemy';
 import { damagePlayer } from './game/combat';
 import type { Game } from './game/game';
-import { computeAttackPath, equipWeapon, setSlotOperator } from './game/weaponSystem';
-import type { OperatorId } from './weapons/operators';
+import { computeAttackPath, equipWeapon, evolveWeapon } from './game/weaponSystem';
+import type { OperatorId } from './weapons/types';
 import { Arena } from './world/arena';
 import { spawnEnemy, startWave } from './game/waves';
 import type { CurvePath } from './weapons/curve';
@@ -123,7 +124,25 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
       game.seed = seed;
     },
     equip: (slot: number, weaponId: string) => equipWeapon(game.world, slot, weaponId),
-    setOperator: (slot: number, op: OperatorId | null) => setSlotOperator(game.world, slot, op),
+    evolve: (id: string, op: OperatorId) => evolveWeapon(game.world, id, op),
+    addEvoPoints(n: number) {
+      game.world.evoPoints += n;
+    },
+    /** 모든 함수를 보유 상태로 만든다(조준·충돌 시험용). */
+    unlockAll() {
+      for (const w of game.world.weapons) game.world.owned.add(w.id);
+    },
+    /** 기본 함수만 가진 상태와 기본 장비로 되돌린다. */
+    resetOwned() {
+      const w = game.world;
+      w.owned.clear();
+      for (const d of w.weapons) if (d.starter) w.owned.add(d.id);
+      LOADOUT.initial.forEach((id, i) => {
+        w.loadout[i].weaponId = id;
+      });
+    },
+    owned: () => [...game.world.owned],
+    evoPoints: () => game.world.evoPoints,
     loadout: () => game.world.loadout.map((s, i) => ({ ...s, formula: game.world.slotWeapon(i).formula })),
     previewPath: (weaponIndex?: number) => serializePath(computeAttackPath(game.world, weaponIndex)),
     attackPath: (id: number) => {
