@@ -436,6 +436,18 @@ await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true,
   await page.evaluate(() => { __fx.world.enemies.length = 0; __fx.world.attacks.length = 0; __fx.setTimeScale(1); __fx.newRun(); });
 }
 
+// ── 시작 직후 웨이브: 웨이브 1이 곧바로 클리어되지 않고, 보스를 잡기 전에는 보스가 한 마리만 있다
+await page.evaluate(() => { __fx.newRun(); __fx.setDebug({ noSpawn: false, invincible: true, freezeEnemies: true }); __fx.setTimeScale(1); });
+await sleep(7000);
+{
+  const t = await snap();
+  const bosses = t.enemies.filter(e => e.kind === 'boss' && e.alive !== false);
+  check('시작 직후: 웨이브 1 보스 한 마리, 보스를 잡기 전에는 웨이브가 넘어가지 않음', t.wave === 1 && bosses.length === 1 && t.enemies.length === 1 && t.bossesDefeated === 0, `wave=${t.wave} 보스=${bosses.length} 적=${t.enemies.length}`);
+  await sleep(6000);
+  const t2 = await snap();
+  check('보스를 잡지 않고 13초가 지나도 웨이브 1 유지(겹쳐 나오지 않음)', t2.wave === 1 && t2.enemies.length === 1, `wave=${t2.wave} 적=${t2.enemies.length}`);
+}
+
 // ── 화면 크기 변경 후 조준 정확도 + 조준점 위치(픽셀)
 async function crosshairPixelCheck(label) {
   await page.evaluate(() => { __fx.setTimeScale(1); __fx.setDebug({ noSpawn: true }); __fx.clearEnemies(); });

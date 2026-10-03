@@ -149,8 +149,9 @@ export function updateWaves(world: World, dt: number): void {
   }
 
   recallStragglers(world);
-  const alive = world.enemies.reduce((n, e) => n + (e.alive ? 1 : 0), 0);
   if (w.queue.length > 0 && !world.debug.noSpawn) spawnEnemy(world, w.queue.shift()!);
+  // 생성한 뒤에 센다: 센 다음에 보스가 나오면 같은 틱에 '적 0명·대기열 비음'으로 보여 웨이브가 곧바로 클리어된다.
+  const alive = world.enemies.reduce((n, e) => n + (e.alive ? 1 : 0), 0);
 
   if (w.queue.length === 0 && alive === 0) {
     const p = world.player;

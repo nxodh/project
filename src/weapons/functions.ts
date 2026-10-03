@@ -14,8 +14,15 @@ import { registerWeapon } from './registry';
  *   탄젠트: sec²x ⇄ tan x ⇄ −ln|cos x|
  *   절댓값: sgn x ⇄ |x| ⇄ x|x|/2
  *   극한:   일차 → e⁻ˣ,  이차 → cos x,  삼차 → sin x,  사차 → ln x,  절댓값 → 우물(|x|ⁿ, n→∞)
- * 기본 함수(starter)는 처음부터 가진다: 원은 도함수·적분이 없고, eˣ는 미분·적분해도 자기 자신이라 다른 함수로 만들 수 없으며,
+ * 기본 함수(starter)는 처음부터 가진다(이유는 각 함수의 starterReason): 원은 함수가 아니고, eˣ는 미분·적분의 고정점이며,
  * 일차·절댓값·탄젠트는 각자 계보(다른 계보와 이어지지 않는 묶음)의 뿌리다.
+ *
+ * ── 수학적 약속 ──
+ * · 미분·적분 간선: 결과의 도함수가 원래 함수의 양의 상수배(적분), 또는 원래 함수의 도함수가 결과의 양의 상수배(미분)다.
+ *   부호는 바뀌지 않으며(−sin ≠ sin), 적분 상수 C와 y축 평행 이동은 무시한다(곡선은 항상 총구에서 시작하도록 평행 이동하므로).
+ * · 극한 간선: 결과 함수의 테일러(매클로린) 급수에서 −xⁿ꼴 n차 항이 들어 있는 대표 함수를 이었다
+ *   (한 항이 여러 급수에 들어 있어도 대표 하나만 연결한다). 절댓값은 수열 |x|ⁿ의 점별 극한이다.
+ * · 곡선은 정의역 [x₀, x₁]을 가로 L, 세로 A로 비례 축소해 그린다(가로·세로 축척이 달라 기울기 값은 보존되지 않고 모양만 보존된다).
  */
 const WHITE = '#ffffff';
 
@@ -36,11 +43,12 @@ registerWeapon({
   fn: (x) => -x,
   tuning: WEAPON_TUNING.linear,
   starter: true,
+  starterReason: '다항 계보의 뿌리: ∫로 이차·삼차·사차가 나오고, 이차를 미분하면 일차로 돌아오는 한 묶음이라 뿌리를 따로 준다.',
   evolves: {
     int: { to: 'quadratic', math: '∫(−x) dx = −x²/2 + C' },
     lim: {
       to: 'expdecay',
-      math: 'lim (1 − x/n)ⁿ = e⁻ˣ  (n=1일 때가 1 − x)',
+      math: 'e⁻ˣ = 1 − x + x²/2 − …  (−x가 1차 항, lim (1 − x/n)ⁿ)',
       series: (x, n) => (1 - x / n) ** n,
     },
   },
@@ -60,6 +68,7 @@ registerWeapon({
   fn: (x) => Math.abs(x),
   tuning: WEAPON_TUNING.abs,
   starter: true,
+  starterReason: '절댓값 계보의 뿌리: sgn x, x|x|/2와 서로 오가는 한 묶음이다.',
   evolves: {
     d: { to: 'sgn', math: '(|x|)′ = sgn x' },
     int: { to: 'xabs', math: '∫|x| dx = x|x|/2 + C' },
@@ -80,6 +89,7 @@ registerWeapon({
   fn: (x) => Math.exp(x) - 1,
   tuning: WEAPON_TUNING.exp,
   starter: true,
+  starterReason: '미분·적분의 고정점이다: (eˣ)′ = ∫eˣ dx = eˣ 라서 다른 함수에서 이 두 연산으로 만들 수 없다. (극한 (1+x/n)ⁿ으로는 만들 수 있지만 기울기 +1인 일차에서 시작해야 하는데, 이 게임의 일차(−x)에서는 e⁻ˣ가 나오므로 eˣ는 기본으로 준다.)',
   evolves: {
     d: { to: 'exp', math: '(eˣ)′ = eˣ  (자기 자신)' },
     int: { to: 'exp', math: '∫eˣ dx = eˣ + C  (자기 자신)' },
@@ -99,13 +109,14 @@ registerWeapon({
   fn: (x) => Math.tan(x),
   tuning: WEAPON_TUNING.tan,
   starter: true,
+  starterReason: '탄젠트 계보의 뿌리: sec²x, −ln|cos x|와 서로 오가는 한 묶음이다.',
   evolves: {
     d: { to: 'secsq', math: '(tan x)′ = sec²x' },
     int: { to: 'neglncos', math: '∫tan x dx = −ln|cos x| + C' },
   },
 });
 
-// ⑤ 원의 방정식 x² + y² = 1 (온전한 원) — 도함수·적분이 없어 만들 수 없다
+// ⑤ 원의 방정식 x² + y² = 1 (온전한 원) — 함수가 아니라서(한 x에 y가 둘) 진화 대상이 아니다
 // 총구와 커서를 지름의 양 끝으로 하는 원을 한 바퀴 그린다. 커서가 가까우면 작은 원, 멀면 큰 원(최대 지름 = 사거리).
 // 함수 그래프로는 나타낼 수 없으므로 매개변수 곡선(trace)으로 정의하고, fn은 위쪽 반원(HUD 아이콘·정의역 검사용)이다.
 // 원은 가운데가 비어 있어 안쪽 적은 맞지 않고 테두리가 지나가는 적만 맞는다. 둘러싸인 적을 한꺼번에 친다.
@@ -121,6 +132,7 @@ registerWeapon({
   trace: (t) => ({ u: (1 - Math.cos(2 * PI * t)) / 2, v: Math.sin(2 * PI * t) }),
   tuning: WEAPON_TUNING.circle,
   starter: true,
+  starterReason: '함수가 아니다: x² + y² = 1은 한 x에 y가 두 개(±)라 y = f(x)가 아니므로 이 게임의 미분·적분·극한(y = f(x)에 대한 연산)을 적용할 수 없고, 어떤 함수에서도 이 연산으로 만들 수 없다.',
 });
 
 // ═════════ 다항함수 계보 (일차에서 적분으로 진화) ═════════
@@ -141,7 +153,7 @@ registerWeapon({
     int: { to: 'cubic', math: '∫(−x²) dx = −x³/3 + C' },
     lim: {
       to: 'cosine',
-      math: 'cos x = 1 − x²/2 + x⁴/24 − …  (−x²이 n=2 항)',
+      math: 'cos x = 1 − x²/2 + x⁴/24 − …  (−x²이 2차 항)',
       series: (x, n) => cosPartial(x, n),
     },
   },
@@ -163,7 +175,7 @@ registerWeapon({
     int: { to: 'quartic', math: '∫(−x³) dx = −x⁴/4 + C' },
     lim: {
       to: 'sine',
-      math: 'sin x = x − x³/6 + x⁵/120 − …  (−x³이 n=3 항)',
+      math: 'sin x = x − x³/6 + x⁵/120 − …  (−x³이 3차 항)',
       series: (x, n) => sinPartial(x, n),
     },
   },
@@ -184,7 +196,7 @@ registerWeapon({
     d: { to: 'cubic', math: '(−x⁴)′ = −4x³' },
     lim: {
       to: 'log',
-      math: 'ln(1+u) = u − u²/2 + u³/3 − u⁴/4 + …  (u = x−1, −u⁴이 n=4 항)',
+      math: 'ln(1+u) = u − u²/2 + u³/3 − u⁴/4 + …  (u = x−1, −u⁴이 4차 항)',
       series: (x, n) => lnPartial(x, n),
     },
   },
@@ -239,7 +251,8 @@ registerWeapon({
   },
 });
 
-// 로그함수 y = ln x,  x∈[0.05, 2] — 총구 앞에서 거의 수직으로 솟은 뒤 수평으로
+// 로그함수 y = ln x,  x∈[0.05, 2] — 총구 앞에서 급히 솟은 뒤(처음 10% 구간에서 약 43% 높이) 완만해진다
+// 정의역 끝을 2로 둔 것은 ln x의 테일러 급수(u = x−1)가 |u| ≤ 1, 즉 x ≤ 2에서 수렴하기 때문이다.
 registerWeapon({
   id: 'log',
   name: '로그함수',

@@ -169,6 +169,13 @@ describe('기본 함수와 도달 가능성', () => {
     }
   });
 
+  it('기본 함수에는 기본인 이유가 적혀 있고, 기본이 아닌 함수에는 없다', () => {
+    for (const w of all()) {
+      if (w.starter) expect((w.starterReason ?? '').length, w.id).toBeGreaterThan(20);
+      else expect(w.starterReason, w.id).toBeUndefined();
+    }
+  });
+
   it('원은 미분·적분·극한 어느 쪽으로도 이어지지 않는다(독립 도형)', () => {
     expect(byId('circle').evolves).toBeUndefined();
     for (const w of all()) for (const e of Object.values(w.evolves ?? {})) expect(e.to).not.toBe('circle');

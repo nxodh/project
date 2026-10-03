@@ -233,6 +233,20 @@ describe('웨이브와 스폰', () => {
     expect(world.player.hp).toBeGreaterThan(50); // 웨이브 클리어 회복
   });
 
+  it('보스를 잡기 전에는 웨이브가 클리어되지 않고, 보스는 한 마리만 나온다(웨이브가 겹쳐 나오지 않는다)', () => {
+    const world = new World(1);
+    for (let i = 0; i < 40 / STEP; i++) updateWaves(world, STEP); // 아무도 처치하지 않고 40초
+    expect(world.waves.wave).toBe(1);
+    expect(world.waves.phase).toBe('active');
+    expect(world.enemies.filter((e) => e.alive && e.kind === 'boss').length).toBe(1);
+    expect(world.stats.bossesDefeated).toBe(0);
+    // 보스를 처치하면 그때 클리어되고, 다음 보스는 준비 시간 뒤에 나온다
+    for (const e of world.enemies) e.alive = false;
+    updateWaves(world, STEP);
+    expect(world.waves.phase).toBe('intermission');
+    expect(world.enemies.filter((e) => e.alive).length).toBe(0);
+  });
+
   it('모든 웨이브는 보스 한 마리뿐이다(잡몹 웨이브 없음)', () => {
     for (const w of [1, 2, 3, 4, 5, 6, 10, 15]) {
       expect(buildQueue(w)).toEqual(['boss']);

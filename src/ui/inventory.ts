@@ -191,7 +191,7 @@ export class InventoryView {
       this.benchEl.innerHTML =
         '<p class="hint">보유한 함수 카드를 누르면 <b>진화 작업대</b>가 열립니다. 슬롯을 누르면 그 함수가 장착됩니다. ' +
         '미분·적분·극한의 결과는 수학적으로 맞는 함수이며, 보스를 처치하면 진화 포인트를 얻습니다. ' +
-        '<b>기본</b> 표시 함수는 다른 함수로 만들 수 없어(또는 계보의 뿌리라서) 처음부터 가지고 있습니다.</p>';
+        '<b>기본</b> 표시 함수는 이 연산으로 만들 수 없거나 계보의 뿌리라서 처음부터 가지고 있습니다(이유는 함수를 고르면 나옵니다).</p>';
       return;
     }
     const base = sel.def;
@@ -215,7 +215,8 @@ export class InventoryView {
         return `<div class="bench-row"><span class="op-sym">${info.symbol}</span><div class="bench-math">${o.edge?.math ?? info.math}</div><div class="bench-result">${state}</div>${btn}</div>`;
       })
       .join('');
-    this.benchEl.innerHTML = `<div class="bench-head"><b>${base.name}</b> <i>${base.formula}</i><span class="dim"> · ${base.role}</span></div>${rows}<p class="dim">${statLine(base)} · 진화 비용: 미분 ${EVOLUTION.cost.d}, 적분 ${EVOLUTION.cost.int}, 극한 ${EVOLUTION.cost.lim} EP</p>`;
+    const why = base.starter && base.starterReason ? `<p class="dim">★ 기본 함수인 이유: ${base.starterReason}</p>` : '';
+    this.benchEl.innerHTML = `<div class="bench-head"><b>${base.name}</b> <i>${base.formula}</i><span class="dim"> · ${base.role}</span></div>${why}${rows}<p class="dim">${statLine(base)} · 진화 비용: 미분 ${EVOLUTION.cost.d}, 적분 ${EVOLUTION.cost.int}, 극한 ${EVOLUTION.cost.lim} EP</p>`;
     for (const o of evolutionOptions(base)) {
       if (o.result && !o.self) {
         const cv = this.benchEl.querySelector<HTMLCanvasElement>(`canvas[data-result="${o.result.id}"]`);
