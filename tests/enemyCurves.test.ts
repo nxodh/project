@@ -156,7 +156,7 @@ describe('보스', () => {
     expect(boss.body.y).toBe(820);
   });
 
-  it('체력이 줄면 단계가 오르며 쓰는 패턴이 늘고, 마지막 단계에서 부하를 부른다', () => {
+  it('체력이 줄면 단계가 오르며 쓰는 패턴이 늘어난다(부하는 소환하지 않는다)', () => {
     const world = new World(1);
     world.debug.invincible = true;
     world.waves.wave = 5;
@@ -173,16 +173,15 @@ describe('보스', () => {
         world.player.hp = world.player.maxHp;
       }
     };
-    run(8);
+    run(16);
     expect(boss.bossPhase).toBe(0);
     const phase0 = casts.size;
     expect(phase0).toBeGreaterThanOrEqual(3);
     boss.hp = boss.maxHp * 0.25;
-    run(12);
+    run(16);
     expect(boss.bossPhase).toBe(2);
     expect(casts.size).toBeGreaterThan(phase0);
-    expect(world.enemies.filter((x) => x.kind !== 'boss').length).toBeGreaterThanOrEqual(2);
-    expect(boss.summoned).toBe(true);
+    expect(world.enemies.filter((x) => x.kind !== 'boss').length).toBe(0);
   });
 
   it('보스를 쓰러뜨리면 점수·회복·보스 처치 수가 오르고 남은 보스 곡선이 사라진다', async () => {

@@ -1,5 +1,5 @@
 import { ENEMIES, PLAYER, WAVES } from '../config';
-import { chance, random, randRange } from '../core/rng';
+import { random, randRange } from '../core/rng';
 import { Enemy, scaledStats, type EnemyKind } from '../entities/enemy';
 import type { World } from './world';
 
@@ -18,30 +18,14 @@ export function createWaveState(): WaveState {
   return { wave: 0, phase: 'intermission', timer: WAVES.firstDelay, queue: [], spawnTimer: 0, total: 0 };
 }
 
+/** 모든 웨이브가 보스전이다. */
 export function isBossWave(wave: number): boolean {
-  return wave > 0 && wave % WAVES.bossEvery === 0;
+  return wave > 0;
 }
 
-export function buildQueue(wave: number): EnemyKind[] {
-  const q: EnemyKind[] = [];
-  if (isBossWave(wave)) {
-    // 보스가 먼저 나오고 부하가 뒤따른다.
-    const m = WAVES.bossMinions(wave);
-    q.push('boss');
-    for (let i = 0; i < m.melee; i++) q.push('melee');
-    for (let i = 0; i < m.sine; i++) q.push('sine');
-    return q;
-  }
-  for (let i = 0; i < WAVES.meleeCount(wave); i++) q.push('melee');
-  for (let i = 0; i < WAVES.rangedCount(wave); i++) q.push('ranged');
-  for (let i = 0; i < WAVES.sineCount(wave); i++) q.push('sine');
-  for (let i = 0; i < WAVES.lobberCount(wave); i++) q.push('lobber');
-  // 섞되, 첫 적은 근접형으로 두어 웨이브 시작이 갑작스럽지 않게 한다.
-  for (let i = q.length - 1; i > 1; i--) {
-    const j = 1 + Math.floor(random() * i);
-    [q[i], q[j]] = [q[j], q[i]];
-  }
-  return q;
+/** 웨이브 구성: 보스 한 마리. (잡몹 웨이브는 없다.) */
+export function buildQueue(_wave: number): EnemyKind[] {
+  return ['boss'];
 }
 
 export function startWave(world: World, wave: number): void {
@@ -51,8 +35,7 @@ export function startWave(world: World, wave: number): void {
   w.queue = buildQueue(wave);
   w.total = w.queue.length;
   w.spawnTimer = 0;
-  if (isBossWave(wave)) world.showBanner(`BOSS · WAVE ${wave}`, '함수의 군주가 나타났다', '#ffffff', 2.6);
-  else world.showBanner(`WAVE ${wave}`, `적 ${w.total}명`, '#ffffff', 1.8);
+  world.showBanner(`BOSS · WAVE ${wave}`, '함수의 군주가 나타났다', '#ffffff', 2.6);
 }
 
 function fitsAt(world: World, kind: EnemyKind, x: number, y: number): boolean {
@@ -121,7 +104,7 @@ export function findSpawnPoint(world: World, kind: EnemyKind): { x: number; y: n
 
 export function spawnEnemy(world: World, kind: EnemyKind, x?: number, y?: number, elite?: boolean): Enemy {
   const wave = Math.max(1, world.waves.wave);
-  const isElite = kind === 'boss' ? false : (elite ?? chance(WAVES.eliteChance(wave)));
+  const isElite = kind === 'boss' ? false : (elite ?? false);
   const pos = x !== undefined && y !== undefined ? { x, y } : findSpawnPoint(world, kind);
   const e = new Enemy(kind, pos.x, pos.y, scaledStats(kind, wave, isElite), isElite);
   e.facing = world.player.body.x >= pos.x ? 1 : -1;
@@ -167,13 +150,7 @@ export function updateWaves(world: World, dt: number): void {
 
   recallStragglers(world);
   const alive = world.enemies.reduce((n, e) => n + (e.alive ? 1 : 0), 0);
-  w.spawnTimer -= dt;
-  if (w.queue.length > 0 && w.spawnTimer <= 0 && alive < WAVES.maxAlive(w.wave) && !world.debug.noSpawn) {
-    const kind = w.queue.shift()!;
-    spawnEnemy(world, kind);
-    // 보스 등장 직후에는 부하가 조금 늦게 나온다.
-    w.spawnTimer = kind === 'boss' ? 3 : WAVES.spawnInterval;
-  }
+  if (w.queue.length > 0 && !world.debug.noSpawn) spawnEnemy(world, w.queue.shift()!);
 
   if (w.queue.length === 0 && alive === 0) {
     const p = world.player;

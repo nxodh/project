@@ -67,7 +67,7 @@ export const PLAYER = {
   muzzleDistance: 40,
   spawnX: 520,
   /** 웨이브를 클리어할 때마다 회복하는 체력. */
-  waveHeal: 20,
+  waveHeal: 30,
 } as const;
 
 /** 조작 키(물리 키 코드). */
@@ -77,7 +77,30 @@ export const KEYS = {
   jump: 'Space',
   crouch: 'KeyS',
   pause: 'Escape',
+  inventory: 'KeyE',
 } as const;
+
+/** 무기 인벤토리: 핫바 슬롯 수(숫자 키 1~N)와 시작 장비. */
+export const LOADOUT = {
+  slots: 5,
+  /** 시작 때 슬롯에 들어 있는 무기 id (순서 = 슬롯 번호). */
+  initial: ['linear', 'quadratic', 'sine', 'abs', 'exp'],
+} as const;
+
+/**
+ * 연산자(인벤토리 아이템): 슬롯의 무기 함수에 미분·부정적분·극한을 적용한다. 모양은 수학 그대로 바뀌고 수치는 아래 배율로 바뀐다.
+ */
+export const OPERATOR_TUNING = {
+  /** 미분 d/dx: 기울기를 쏜다 — 빠르고 날카롭지만 가볍다. */
+  d: { damage: 0.8, cooldown: 0.75, range: 1, speed: 1.5, hitRadius: 0.8 },
+  /** 부정적분 ∫dx: 넓이를 쌓는다 — 두껍고 묵직하지만 느리다. */
+  int: { damage: 1.3, cooldown: 1.3, range: 1, speed: 0.85, hitRadius: 1.5 },
+  /** 극한 lim: x→∞(또는 점근선)까지 정의역을 넓혀 멀리, 끝이 극단적으로 뻗는다. */
+  lim: { damage: 0.95, cooldown: 1.15, range: 1.35, speed: 1, hitRadius: 1 },
+} as const;
+
+/** 커서까지의 거리에 맞춰 곡선을 줄이는 최소 비율(곡선의 끝점이 커서에 닿는다). */
+export const REACH_MIN_SCALE = 0.2;
 
 export const COMBAT = {
   /** 쿨다운 중 짧게 누른 클릭을 기억해 두는 시간(ms). */
@@ -137,7 +160,6 @@ export const WEAPON_TUNING = {
   abs: { damage: 32, cooldown: 0.8, range: 420, amplitude: 62, speed: 1500, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 340 },
   exp: { damage: 46, cooldown: 0.9, range: 340, amplitude: 260, speed: 1350, hold: 0.14, fade: 0.24, hitRadius: 9, knockback: 380 },
   log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  floor: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1500, hold: 0.16, fade: 0.22, hitRadius: 7, knockback: 200 },
   circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 170, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
   tan: { damage: 36, cooldown: 1.0, range: 460, amplitude: 220, speed: 1500, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
 } satisfies Record<string, WeaponTuning>;
@@ -149,12 +171,12 @@ export const WEAPON_TUNING = {
 export const ENEMY_PATTERN_TUNING = {
   sineWave: { damage: 9, cooldown: 0, range: 720, amplitude: 46, speed: 640, hold: 0.25, fade: 0.25, hitRadius: 6, knockback: 0 },
   lobArc: { damage: 11, cooldown: 0, range: 600, amplitude: 170, speed: 720, hold: 0.2, fade: 0.2, hitRadius: 7, knockback: 0 },
-  bossSine: { damage: 16, cooldown: 0, range: 1050, amplitude: 70, speed: 760, hold: 0.25, fade: 0.25, hitRadius: 8, knockback: 0 },
-  bossLob: { damage: 18, cooldown: 0, range: 700, amplitude: 260, speed: 820, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
-  bossRoof: { damage: 22, cooldown: 0, range: 760, amplitude: 150, speed: 950, hold: 0.25, fade: 0.25, hitRadius: 13, knockback: 0 },
-  bossExp: { damage: 24, cooldown: 0, range: 520, amplitude: 380, speed: 900, hold: 0.2, fade: 0.25, hitRadius: 10, knockback: 0 },
-  bossLine: { damage: 14, cooldown: 0, range: 1150, amplitude: 0, speed: 1250, hold: 0.15, fade: 0.2, hitRadius: 5, knockback: 0 },
-  bossTan: { damage: 20, cooldown: 0, range: 700, amplitude: 300, speed: 900, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
+  bossSine: { damage: 9, cooldown: 0, range: 1050, amplitude: 70, speed: 560, hold: 0.25, fade: 0.25, hitRadius: 8, knockback: 0 },
+  bossLob: { damage: 10, cooldown: 0, range: 700, amplitude: 260, speed: 600, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
+  bossRoof: { damage: 12, cooldown: 0, range: 760, amplitude: 150, speed: 680, hold: 0.25, fade: 0.25, hitRadius: 13, knockback: 0 },
+  bossExp: { damage: 13, cooldown: 0, range: 520, amplitude: 380, speed: 660, hold: 0.2, fade: 0.25, hitRadius: 10, knockback: 0 },
+  bossLine: { damage: 8, cooldown: 0, range: 1150, amplitude: 0, speed: 900, hold: 0.15, fade: 0.2, hitRadius: 5, knockback: 0 },
+  bossTan: { damage: 11, cooldown: 0, range: 700, amplitude: 300, speed: 650, hold: 0.25, fade: 0.25, hitRadius: 9, knockback: 0 },
 } satisfies Record<string, WeaponTuning>;
 
 /** 적 머리 모양(흑백 화면에서 종류를 구분하는 표식). */
@@ -255,21 +277,21 @@ export const ENEMIES = {
     aimLockTime: 0.35,
   },
   boss: {
-    hp: 2200,
-    speed: 120,
+    hp: 780,
+    speed: 92,
     width: 50,
     height: 176,
     score: 3000,
     color: '#ffffff',
     head: 'boss' as HeadShape,
     knockbackTaken: 0.06,
-    contactDamage: 15,
-    preferredDistance: 480,
+    contactDamage: 7,
+    preferredDistance: 540,
     /** 단계별(체력 비율 경계) 공격 간격과 예고 시간. */
     phases: [
-      { above: 0.6, interval: 2.0, telegraph: 0.85 },
-      { above: 0.3, interval: 1.6, telegraph: 0.7 },
-      { above: 0, interval: 1.25, telegraph: 0.6 },
+      { above: 0.6, interval: 3.2, telegraph: 1.25 },
+      { above: 0.3, interval: 2.7, telegraph: 1.1 },
+      { above: 0, interval: 2.3, telegraph: 1.0 },
     ],
     /** 처치 시 체력 회복. */
     heal: 40,
@@ -288,29 +310,16 @@ export const ENEMIES = {
 
 export const WAVES = {
   firstDelay: 2.0,
-  intermission: 3.2,
-  spawnInterval: 0.75,
-  /** 이 간격마다 보스전. */
-  bossEvery: 5,
-  /** 웨이브 n의 적 구성(보스 웨이브 제외). */
-  meleeCount: (wave: number) => Math.min(9, 2 + wave),
-  rangedCount: (wave: number) => 1 + Math.floor((wave - 1) / 3),
-  sineCount: (wave: number) => (wave < 3 ? 0 : 1 + Math.floor((wave - 3) / 3)),
-  lobberCount: (wave: number) => (wave < 4 ? 0 : 1 + Math.floor((wave - 4) / 3)),
-  /** 보스 웨이브에 함께 나오는 부하. */
-  bossMinions: (wave: number) => ({ melee: 1 + wave / 5, sine: Math.min(2, wave / 5) }),
-  /** 동시에 살아 있을 수 있는 최대 적 수. */
-  maxAlive: (wave: number) => Math.min(10, 4 + wave),
+  intermission: 3.6,
+  /** 모든 웨이브는 보스 한 마리뿐이다(잡몹 웨이브 없음). */
   hpMultiplier: (wave: number) => 1 + 0.16 * (wave - 1),
   speedMultiplier: (wave: number) => Math.min(1.45, 1 + 0.045 * (wave - 1)),
-  damageMultiplier: (wave: number) => 1 + 0.06 * (wave - 1),
-  fireIntervalMultiplier: (wave: number) => Math.max(0.55, 1 - 0.06 * (wave - 1)),
+  damageMultiplier: (wave: number) => 1 + 0.05 * (wave - 1),
+  fireIntervalMultiplier: (wave: number) => Math.max(0.6, 1 - 0.04 * (wave - 1)),
   scoreMultiplier: (wave: number) => 1 + 0.1 * (wave - 1),
-  /** n번째 보스의 체력 배율. */
-  bossHpMultiplier: (bossIndex: number) => 1 + 0.45 * (bossIndex - 1),
-  /** 정예 적(체력·크기 증가) 등장 확률. */
-  eliteChance: (wave: number) => (wave < 4 ? 0 : Math.min(0.35, 0.08 * (wave - 3))),
-  /** 스폰 위치 제약: 플레이어와의 최소 거리, 바로 위/아래로 판단하는 수평 거리, 최대 수평 거리. */
+  /** n번째 웨이브 보스의 체력 배율(완만하게 오른다). */
+  bossHpMultiplier: (bossIndex: number) => 1 + 0.13 * (bossIndex - 1),
+  /** 스폰 위치 제약: 보스를 제외한 적(테스트·디버그 생성용)의 최소 거리, 바로 위/아래 수평 거리, 최대 수평 거리. */
   minSpawnDistance: 300,
   noSpawnAboveHalfWidth: 140,
   maxSpawnDistanceX: 1300,

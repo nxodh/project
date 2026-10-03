@@ -5,9 +5,10 @@ import { setSeed } from '../src/core/rng';
 import { Bullet } from '../src/entities/bullet';
 import type { Enemy } from '../src/entities/enemy';
 import { findCurveHit, updateAttacks } from '../src/game/combat';
-import { computeAttackPath, fireWeapon, selectWeapon } from '../src/game/weaponSystem';
+import { computeAttackPath, equipWeapon, fireWeapon, selectWeapon, setSlotOperator } from '../src/game/weaponSystem';
 import { spawnEnemy } from '../src/game/waves';
 import { World } from '../src/game/world';
+import { Arena } from '../src/world/arena';
 import { updateAim } from '../src/game/playerSystem';
 import { CurveAttack } from '../src/weapons/attack';
 import { buildCurvePath, makeAimFrame } from '../src/weapons/curve';
@@ -46,30 +47,73 @@ describe('선분-사각형 거리', () => {
 });
 
 describe('미리보기와 실제 발사', () => {
-  it('같은 위치·조준에서 미리보기 경로와 발사된 공격 경로가 완전히 같다 (5종 × 여러 방향)', () => {
+  it('같은 위치·조준에서 미리보기 경로와 발사된 공격 경로가 완전히 같다 (8종 × 연산자 4가지 × 여러 방향·거리)', () => {
     const world = makeWorld();
     world.player.body.x = 760;
     world.player.body.y = 500; // 중앙 발판 위
-    for (let wi = 0; wi < getWeapons().length; wi++) {
-      for (let deg = 0; deg < 360; deg += 30) {
-        const th = (deg * Math.PI) / 180;
-        const s = world.player.shoulder();
-        updateAim(world.player, { x: s.x + Math.cos(th) * 300, y: s.y + Math.sin(th) * 300 });
-        selectWeapon(world, wi);
-        const preview = computeAttackPath(world);
-        world.player.cooldowns.fill(0);
-        world.player.globalCooldown = 0;
-        const attack = fireWeapon(world);
-        expect(attack.path.count).toBe(preview.count);
-        expect(Array.from(attack.path.xs.subarray(0, preview.count))).toEqual(
-          Array.from(preview.xs.subarray(0, preview.count)),
-        );
-        expect(Array.from(attack.path.ys.subarray(0, preview.count))).toEqual(
-          Array.from(preview.ys.subarray(0, preview.count)),
-        );
-        expect(attack.path.blocked).toBe(preview.blocked);
+    for (const base of getWeapons()) {
+      equipWeapon(world, 0, base.id);
+      for (const op of [null, 'd', 'int', 'lim'] as const) {
+        setSlotOperator(world, 0, op);
+        selectWeapon(world, 0);
+        for (let deg = 0; deg < 360; deg += 45) {
+          for (const dist of [90, 300, 900]) {
+            const th = (deg * Math.PI) / 180;
+            const s = world.player.shoulder();
+            updateAim(world.player, { x: s.x + Math.cos(th) * dist, y: s.y + Math.sin(th) * dist });
+            const preview = computeAttackPath(world);
+            world.player.cooldowns.fill(0);
+            world.player.globalCooldown = 0;
+            const attack = fireWeapon(world);
+            expect(attack.path.count).toBe(preview.count);
+            expect(Array.from(attack.path.xs.subarray(0, preview.count))).toEqual(Array.from(preview.xs.subarray(0, preview.count)));
+            expect(Array.from(attack.path.ys.subarray(0, preview.count))).toEqual(Array.from(preview.ys.subarray(0, preview.count)));
+            expect(attack.path.blocked).toBe(preview.blocked);
+          }
+        }
       }
     }
+  });
+
+  /** 바닥만 있는 평지 월드(곡선이 발판에 가로막히지 않게 한다). */
+  function flatWorld(): World {
+    const world = makeWorld();
+    // 바닥을 아주 아래에 두어, 아래로 처지는 곡선(지수·미분 등)이 바닥에 걸려 끊기지 않게 한다.
+    const ground = { kind: 'ground' as const, walkable: true, x: -1e6, y: 3000, w: 2e6, h: 300 };
+    (world as unknown as { arena: Arena }).arena = Arena.fixed([ground]);
+    return world;
+  }
+
+  it('적 위에 커서를 올리고 쏘면 맞는다: 모든 무기 × 연산자 × 거리 (곡선의 끝점이 커서에 닿는다)', () => {
+    const misses: string[] = [];
+    for (const base of getWeapons()) {
+      for (const op of [null, 'd', 'int', 'lim'] as const) {
+        for (const dist of [200, 320]) {
+          const world = flatWorld();
+          const x0 = 200;
+          world.player.body.x = x0;
+          world.player.body.y = 600;
+          const e = place(world, 'melee', x0 + dist, 600);
+          e.body.vx = 0;
+          equipWeapon(world, 0, base.id);
+          setSlotOperator(world, 0, op);
+          selectWeapon(world, 0);
+          updateAim(world.player, e.center());
+          const hp0 = e.hp;
+          world.player.cooldowns.fill(0);
+          world.player.globalCooldown = 0;
+          fireWeapon(world);
+          for (let i = 0; i < 600 && world.attacks.length; i++) {
+            e.body.x = x0 + dist;
+            e.body.y = 600;
+            e.body.vx = 0;
+            updateAttacks(world, STEP);
+          }
+          if (e.hp >= hp0) misses.push(`${base.id}/${op ?? '-'}@${dist}`);
+        }
+      }
+    }
+    expect(misses).toEqual([]);
   });
 
   it('발사 후 플레이어와 조준이 움직여도 이미 발사한 곡선은 그대로다', () => {

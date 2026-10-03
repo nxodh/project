@@ -18,7 +18,10 @@ export function updateAim(p: Player, target: Vec2): void {
   const dx = target.x - s.x;
   const dy = target.y - s.y;
   const len = Math.hypot(dx, dy);
-  if (len > 4) p.aim = { x: dx / len, y: dy / len };
+  if (len > 4) {
+    p.aim = { x: dx / len, y: dy / len };
+    p.aimDist = len;
+  }
   if (p.aim.x > 0.02) p.facing = 1;
   else if (p.aim.x < -0.02) p.facing = -1;
 }

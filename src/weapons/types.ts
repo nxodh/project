@@ -1,5 +1,11 @@
 import type { WeaponTuning } from '../config';
 
+/** 연산자(미분·부정적분)를 적용한 함수 하나: 해석적 식과 표시용 수식. */
+export interface OperatedFunction {
+  fn: (x: number) => number;
+  formula: string;
+}
+
 /**
  * 함수 무기 정의. 새 무기는 이 형태의 데이터를 registerWeapon()으로 등록하면 된다.
  *
@@ -24,4 +30,14 @@ export interface FunctionWeaponDef {
   domain: readonly [number, number];
   fn: (x: number) => number;
   tuning: WeaponTuning;
+  /**
+   * 매개변수 곡선(함수 그래프로 나타낼 수 없는 도형, 예: 원). u는 전방(lx = L·u), v는 수직(ly = A·v) 비율이다.
+   * 있으면 fn·domain 대신 이 곡선을 쓰고, 조준점은 총구에서 가장 먼 점이 된다.
+   */
+  trace?: (t: number) => { u: number; v: number };
+  /** 미분(f′)과 부정적분(∫f dx)의 해석적 식. 없으면 연산자를 장착할 수 없다. */
+  derivative?: OperatedFunction;
+  integral?: OperatedFunction;
+  /** 극한 연산자(x→∞ 방향으로 정의역을 넓히거나 점근선에 접근시킨 정의역). */
+  limitDomain?: readonly [number, number];
 }

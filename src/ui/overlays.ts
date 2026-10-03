@@ -1,4 +1,5 @@
 import type { FunctionWeaponDef } from '../weapons/types';
+import { InventoryView, type InventoryModel } from './inventory';
 
 export interface GameOverStats {
   score: number;
@@ -25,6 +26,8 @@ export class Overlays {
   private readonly start = $('overlay-start');
   private readonly pause = $('overlay-pause');
   private readonly over = $('overlay-gameover');
+  private readonly inventoryEl = $('overlay-inventory');
+  readonly inventory = new InventoryView();
 
   constructor(weapons: readonly FunctionWeaponDef[]) {
     $('btn-start').addEventListener('click', () => this.onStart());
@@ -34,10 +37,10 @@ export class Overlays {
 
     const list = $('weapon-list');
     list.innerHTML = '';
-    weapons.forEach((w, i) => {
+    weapons.forEach((w) => {
       const li = document.createElement('li');
       li.style.setProperty('--c', w.color);
-      li.innerHTML = `<kbd>${i + 1}</kbd><b>${w.name}</b><i>${w.formula}</i><span>${w.role}</span>`;
+      li.innerHTML = `<kbd>·</kbd><b>${w.name}</b><i>${w.formula}</i><span>${w.role}</span>`;
       list.appendChild(li);
     });
   }
@@ -45,7 +48,7 @@ export class Overlays {
   private show(el: HTMLElement | null): void {
     // 숨겨지는 버튼에 포커스가 남아 있으면 Space(점프)가 버튼을 누르므로 먼저 해제한다.
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    for (const o of [this.start, this.pause, this.over]) o.hidden = o !== el;
+    for (const o of [this.start, this.pause, this.over, this.inventoryEl]) o.hidden = o !== el;
     document.body.classList.toggle('playing', el === null);
     const btn = el?.querySelector('button');
     if (btn instanceof HTMLButtonElement) btn.focus({ preventScroll: true });
@@ -57,6 +60,11 @@ export class Overlays {
 
   showPause(): void {
     this.show(this.pause);
+  }
+
+  showInventory(model: InventoryModel): void {
+    this.show(this.inventoryEl);
+    this.inventory.open(model);
   }
 
   showGameOver(stats: GameOverStats): void {

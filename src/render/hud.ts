@@ -1,12 +1,12 @@
 import { TERRAIN, VIEW } from '../config';
 import { bossPhaseOf } from '../game/bossAI';
-import { enemiesRemaining, isBossWave } from '../game/waves';
+import { enemiesRemaining } from '../game/waves';
 import type { World } from '../game/world';
 import type { FunctionWeaponDef } from '../weapons/types';
 import { PALETTE } from './colors';
 import { mathX, mathY } from './worldRenderer';
 
-const SLOT_W = 90;
+const SLOT_W = 128;
 const SLOT_H = 62;
 const SLOT_GAP = 6;
 const SLOT_Y = 830;
@@ -32,6 +32,27 @@ export function drawFunctionIcon(
   h: number,
   color: string,
 ): void {
+  if (def.trace) {
+    // 매개변수 곡선(원): 상자 안에 비율을 유지해 그린다.
+    const size = Math.min(w, h);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const M = 48;
+    for (let i = 0; i <= M; i++) {
+      const { u, v } = def.trace(i / M);
+      const px = cx + (u - 0.5) * size;
+      const py = cy - v * 0.5 * size;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   const [x0, x1] = def.domain;
   const N = 64;
   let ymin = Infinity;
@@ -77,10 +98,11 @@ export function drawFunctionIcon(
 
 function drawSlots(ctx: CanvasRenderingContext2D, world: World): void {
   const p = world.player;
-  const n = world.weapons.length;
+  const n = world.loadout.length;
   const total = n * SLOT_W + (n - 1) * SLOT_GAP;
   const x0 = (VIEW.width - total) / 2;
-  world.weapons.forEach((def, i) => {
+  world.loadout.forEach((slot, i) => {
+    const def = world.slotWeapon(i);
     const selected = i === p.weaponIndex;
     const x = x0 + i * (SLOT_W + SLOT_GAP);
     const y = SLOT_Y - (selected ? 4 : 0);
@@ -111,6 +133,21 @@ function drawSlots(ctx: CanvasRenderingContext2D, world: World): void {
     ctx.fillText(String(i + 1), x + 6, y + 14);
     ctx.font = `bold 11px ${PALETTE.font}`;
     ctx.fillText(def.name, x + 17, y + 14);
+    if (slot.op) {
+      // 연산자 배지: 슬롯 오른쪽 위
+      const sym = slot.op === 'd' ? 'd/dx' : slot.op === 'int' ? '∫' : 'lim';
+      ctx.font = `italic bold 11px ${PALETTE.mathFont}`;
+      const bw = ctx.measureText(sym).width + 8;
+      roundRect(ctx, x + SLOT_W - bw - 4, y + 3, bw, 14, 4);
+      ctx.fillStyle = fg;
+      ctx.fill();
+      ctx.fillStyle = selected ? '#ffffff' : '#000000';
+      ctx.textAlign = 'center';
+      ctx.fillText(sym, x + SLOT_W - bw / 2 - 4, y + 14);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = fg;
+      ctx.font = `bold 11px ${PALETTE.font}`;
+    }
     drawFunctionIcon(ctx, def, x + 22, y + 20, SLOT_W - 44, 20, fg);
     ctx.font = `italic 12px ${PALETTE.mathFont}`;
     ctx.textAlign = 'center';
@@ -151,7 +188,7 @@ function drawControls(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = PALETTE.textDim;
   ctx.fillText('A/D 이동 · Space 점프 · S 숙이기', x, 846);
   ctx.fillText('마우스 조준 · 좌클릭 공격(누르면 연사)', x, 864);
-  ctx.fillText('1~9 / 휠 함수 교체 · Esc 일시 정지', x, 882);
+  ctx.fillText('1~5 / 휠 슬롯 · E 인벤토리 · Esc 일시 정지', x, 882);
   ctx.textAlign = 'left';
 }
 
@@ -198,8 +235,8 @@ function drawTopBar(ctx: CanvasRenderingContext2D, world: World): void {
   ctx.fillStyle = PALETTE.textDim;
   const sub =
     w.phase === 'intermission'
-      ? `다음 웨이브까지 ${Math.max(0, w.timer).toFixed(1)}초${isBossWave(w.wave + 1) ? ' · 보스 등장' : ''}`
-      : `남은 적 ${enemiesRemaining(world)}`;
+      ? `다음 보스까지 ${Math.max(0, w.timer).toFixed(1)}초 · E로 장비 정비`
+      : `남은 보스 ${enemiesRemaining(world)}`;
   ctx.fillText(sub, VIEW.width / 2, y + 38);
 
   // 처치 수

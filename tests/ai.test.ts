@@ -211,39 +211,34 @@ describe('웨이브와 스폰', () => {
     }
   });
 
-  it('적을 모두 처치하면 준비 시간 뒤 더 많은 적으로 다음 웨이브가 시작된다', () => {
+  it('보스를 처치하면 준비 시간 뒤 다음 웨이브가 시작되고, 보스 체력이 조금씩 오른다', () => {
     const world = new World(1);
     world.player.hp = 50;
-    const counts: number[] = [];
+    const bossHp: number[] = [];
     let lastWave = 0;
     for (let i = 0; i < 60 / STEP && world.waves.wave < 4; i++) {
       updateWaves(world, STEP);
       if (world.waves.wave !== lastWave) {
         lastWave = world.waves.wave;
-        counts.push(world.waves.total);
+        expect(world.waves.total).toBe(1);
       }
-      // 나타난 적은 즉시 처치
-      for (const e of world.enemies) e.alive = false;
+      for (const e of world.enemies) {
+        if (e.kind === 'boss' && !bossHp.includes(e.maxHp) && bossHp.length < world.waves.wave) bossHp.push(e.maxHp);
+        e.alive = false; // 나타난 보스는 즉시 처치
+      }
       world.enemies.length = 0;
     }
-    expect(counts.length).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThan(counts[i - 1]);
+    expect(bossHp.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < bossHp.length; i++) expect(bossHp[i]).toBeGreaterThan(bossHp[i - 1]);
     expect(world.player.hp).toBeGreaterThan(50); // 웨이브 클리어 회복
   });
 
-  it('5웨이브마다 보스전: 보스가 먼저 나오고 부하가 뒤따른다', () => {
-    expect(buildQueue(5)[0]).toBe('boss');
-    expect(buildQueue(10)[0]).toBe('boss');
-    expect(buildQueue(10).filter((k) => k === 'boss').length).toBe(1);
-    for (const w of [1, 2, 3, 4, 6, 7, 9, 11]) expect(buildQueue(w)).not.toContain('boss');
-    expect(isBossWave(5) && isBossWave(15) && !isBossWave(4)).toBe(true);
-  });
-
-  it('웨이브가 진행되면 함수 곡선을 쓰는 적(사인 술사·포물선 투척병)이 섞인다', () => {
-    expect(buildQueue(2)).not.toContain('sine');
-    expect(buildQueue(3)).toContain('sine');
-    expect(buildQueue(3)).not.toContain('lobber');
-    expect(buildQueue(4)).toContain('lobber');
+  it('모든 웨이브는 보스 한 마리뿐이다(잡몹 웨이브 없음)', () => {
+    for (const w of [1, 2, 3, 4, 5, 6, 10, 15]) {
+      expect(buildQueue(w)).toEqual(['boss']);
+      expect(isBossWave(w)).toBe(true);
+    }
+    expect(isBossWave(0)).toBe(false);
   });
 
   it('두 번째 보스는 첫 보스보다 체력이 많다', () => {

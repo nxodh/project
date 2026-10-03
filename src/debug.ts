@@ -4,7 +4,9 @@ import type { View } from './core/view';
 import type { EnemyKind } from './entities/enemy';
 import { damagePlayer } from './game/combat';
 import type { Game } from './game/game';
-import { computeAttackPath } from './game/weaponSystem';
+import { computeAttackPath, equipWeapon, setSlotOperator } from './game/weaponSystem';
+import type { OperatorId } from './weapons/operators';
+import { Arena } from './world/arena';
 import { spawnEnemy, startWave } from './game/waves';
 import type { CurvePath } from './weapons/curve';
 
@@ -120,6 +122,9 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
     setTerrainSeed(seed: number | null) {
       game.seed = seed;
     },
+    equip: (slot: number, weaponId: string) => equipWeapon(game.world, slot, weaponId),
+    setOperator: (slot: number, op: OperatorId | null) => setSlotOperator(game.world, slot, op),
+    loadout: () => game.world.loadout.map((s, i) => ({ ...s, formula: game.world.slotWeapon(i).formula })),
     previewPath: (weaponIndex?: number) => serializePath(computeAttackPath(game.world, weaponIndex)),
     attackPath: (id: number) => {
       const a = game.world.attacks.find((x) => x.id === id);
@@ -142,6 +147,17 @@ export function installDebugApi(game: Game, view: View, input: Input): void {
       if (opts.active !== false) e.spawnTimer = 0;
       if (opts.hp !== undefined) e.hp = opts.hp;
       return e.id;
+    },
+    /** 바닥만 아주 아래에 있는 평지로 지형을 바꾼다(곡선이 지형에 걸리지 않는 조준 시험용). */
+    useFlatArena(groundY = 3000) {
+      const w = game.world as unknown as { arena: Arena; nav: { arena: Arena } };
+      const arena = Arena.fixed([{ kind: 'ground', walkable: true, x: -1e6, y: groundY, w: 2e6, h: 300 }]);
+      w.arena = arena;
+      w.nav.arena = arena;
+    },
+    /** 새 판을 시작한다(지형·상태 초기화). */
+    newRun() {
+      game.startNewRun();
     },
     clearEnemies() {
       game.world.enemies.length = 0;

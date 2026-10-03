@@ -14,14 +14,15 @@
       <div class="panel">
         <p class="eyebrow">FUNCTION ARSENAL</p>
         <h1><i>f</i>(<i>x</i>) 아레나</h1>
-        <p class="lead">함수를 무기에 장착하면 그 <b>그래프 모양 그대로</b> 공격이 뻗어 나갑니다.<br />끝없이 이어지는 좌표평면 위에서 몰려오는 스틱맨을 처치하세요. <b>5웨이브마다 보스</b>가 나타납니다.</p>
+        <p class="lead">함수를 무기에 장착하면 그 <b>그래프 모양 그대로</b> 공격이 뻗어 나갑니다.<br />끝없이 이어지는 좌표평면 위에서 <b>매 웨이브 나타나는 보스</b>를 처치하세요. <b>인벤토리(E)</b>에서 무기를 갈아 끼우고 <b>미분·적분·극한</b> 연산자를 붙일 수 있습니다.</p>
         <ul id="weapon-list" class="weapons"></ul>
         <div class="controls">
           <span><kbd>A</kbd><kbd>D</kbd> 이동</span>
           <span><kbd>Space</kbd> 점프</span>
           <span><kbd>S</kbd> 숙이기</span>
           <span>마우스 조준 · <kbd>좌클릭</kbd> 공격</span>
-          <span><kbd>1</kbd>~<kbd>9</kbd> / 휠 함수 교체</span>
+          <span><kbd>1</kbd>~<kbd>5</kbd> / 휠 슬롯 교체</span>
+          <span><kbd>E</kbd> 인벤토리</span>
           <span><kbd>Esc</kbd> 일시 정지</span>
         </div>
         <button id="btn-start" class="primary" type="button">게임 시작</button>
@@ -36,12 +37,29 @@
           <span><kbd>Space</kbd> 점프</span>
           <span><kbd>S</kbd> 숙이기</span>
           <span>마우스 조준 · <kbd>좌클릭</kbd> 공격</span>
-          <span><kbd>1</kbd>~<kbd>9</kbd> / 휠 함수 교체</span>
+          <span><kbd>1</kbd>~<kbd>5</kbd> / 휠 슬롯 교체</span>
+          <span><kbd>E</kbd> 인벤토리</span>
         </div>
         <div class="buttons">
           <button id="btn-resume" class="primary" type="button">계속하기 (Esc)</button>
           <button id="btn-pause-restart" type="button">처음부터 다시 시작</button>
         </div>
+      </div>
+    </section>
+
+    <section id="overlay-inventory" class="overlay" hidden>
+      <div class="panel wide">
+        <div class="inv-head">
+          <h2>인벤토리</h2>
+          <button id="btn-inv-close" class="primary" type="button">닫고 계속하기 (E)</button>
+        </div>
+        <h3>핫바 <span class="dim">숫자 키 1~5</span></h3>
+        <div id="inv-slots" class="inv-slots"></div>
+        <h3>함수 무기</h3>
+        <div id="inv-weapons" class="inv-grid"></div>
+        <h3>연산자 <span class="dim">슬롯의 함수에 수학 연산을 적용</span></h3>
+        <div id="inv-ops" class="inv-grid ops"></div>
+        <div id="inv-detail" class="inv-detail"></div>
       </div>
     </section>
 

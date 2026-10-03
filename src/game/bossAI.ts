@@ -6,7 +6,6 @@ import type { EnemyPatternId } from '../weapons/enemyPatterns';
 import { bodyRect } from '../world/physics';
 import { damagePlayer } from './combat';
 import { aimFrom, computeEnemyCurve, fireEnemyCurve, playerFeetPoint, playerTargetPoint, rotate } from './enemyAI';
-import { spawnEnemy } from './waves';
 import type { World } from './world';
 
 /** 보스의 공격 패턴. 모두 함수 곡선이며 시전(예고) 동안 경로가 점선으로 미리 보인다. */
@@ -108,20 +107,13 @@ export function updateBoss(world: World, e: Enemy, dt: number): void {
     if (damagePlayer(world, Math.round(cfg.contactDamage * e.stats.damageMul), b.x, 'boss-contact')) e.contactCooldown = 0.8;
   }
 
-  // 단계 전환: 마지막 단계에 들어서면 부하를 한 번 부른다.
+  // 단계 전환: 체력이 줄면 쓰는 패턴이 늘어난다.
   const phase = bossPhaseOf(e);
   if (phase !== e.bossPhase) {
     e.bossPhase = phase;
     e.patternCursor = 0;
     world.addShake(5);
-    world.showBanner(phase === 1 ? '보스 2단계' : '보스 최종 단계', phase === 1 ? '새 패턴: 부채꼴 · 지수' : '방사형 · 탄젠트 · 부하 소환', '#ffffff', 1.8);
-    if (phase === 2 && !e.summoned) {
-      e.summoned = true;
-      for (const [kind, off] of [['melee', -170], ['sine', 190]] as const) {
-        const m = spawnEnemy(world, kind, b.x + off, world.arena.groundY, false);
-        if (world.arena.overlapsSolid(bodyRect(m.body))) m.body.x = b.x;
-      }
-    }
+    world.showBanner(phase === 1 ? '보스 2단계' : '보스 최종 단계', phase === 1 ? '새 패턴: 부채꼴 · 지수' : '새 패턴: 방사형 · 탄젠트', '#ffffff', 1.8);
   }
   const phaseCfg = cfg.phases[e.bossPhase];
 

@@ -4,13 +4,15 @@ import type { Input } from '../core/input';
 import { FixedStepper } from '../core/loop';
 import type { View } from '../core/view';
 import type { Renderer } from '../render/renderer';
+import type { InventoryModel } from '../ui/inventory';
 import type { Overlays } from '../ui/overlays';
+import { canOperate } from '../weapons/operators';
 import { updateAim } from './playerSystem';
 import { stepWorld } from './simulation';
-import { canFire, computeAttackPath } from './weaponSystem';
+import { canFire, computeAttackPath, equipWeapon, setSlotOperator } from './weaponSystem';
 import { World } from './world';
 
-export type GameState = 'title' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'title' | 'playing' | 'paused' | 'inventory' | 'gameover';
 
 const BEST_KEY = 'fx-arena-best-score';
 
@@ -59,6 +61,13 @@ export class Game {
     ui.onStart = () => this.startNewRun();
     ui.onRestart = () => this.startNewRun();
     ui.onResume = () => this.resume();
+    ui.inventory.onClose = () => this.closeInventory();
+    ui.inventory.onEquip = (slot, id) => {
+      if (equipWeapon(this.world, slot, id)) this.refreshInventory();
+    };
+    ui.inventory.onOperator = (slot, op) => {
+      if (setSlotOperator(this.world, slot, op)) this.refreshInventory();
+    };
     ui.showStart();
   }
 
@@ -83,6 +92,11 @@ export class Game {
     if (this.input.consumePress(KEYS.pause)) {
       if (this.state === 'playing') this.pause();
       else if (this.state === 'paused') this.resume();
+      else if (this.state === 'inventory') this.closeInventory();
+    }
+    if (this.input.consumePress(KEYS.inventory)) {
+      if (this.state === 'playing') this.openInventory();
+      else if (this.state === 'inventory') this.closeInventory();
     }
 
     const aimView = this.aimView();
@@ -132,6 +146,45 @@ export class Game {
     this.stepper.reset();
     this.state = 'playing';
     this.ui.hideAll();
+  }
+
+  /** 인벤토리를 연다(게임은 멈춘다). */
+  openInventory(): void {
+    if (this.state !== 'playing' || !this.world.player.alive) return;
+    this.state = 'inventory';
+    this.input.reset();
+    this.ui.showInventory(this.inventoryModel());
+  }
+
+  closeInventory(): void {
+    if (this.state !== 'inventory') return;
+    this.state = 'playing';
+    this.input.reset();
+    this.stepper.reset();
+    this.ui.hideAll();
+  }
+
+  private refreshInventory(): void {
+    if (this.state === 'inventory') this.ui.inventory.render(this.inventoryModel());
+  }
+
+  inventoryModel(): InventoryModel {
+    const w = this.world;
+    return {
+      slots: w.loadout.map((s, index) => ({
+        index,
+        def: w.slotWeapon(index),
+        baseId: s.weaponId,
+        op: s.op,
+        operable: canOperate(w.weapons.find((x) => x.id === s.weaponId)!),
+        current: index === w.player.weaponIndex,
+      })),
+      weapons: w.weapons.map((def) => ({
+        def,
+        slot: w.loadout.findIndex((s) => s.weaponId === def.id),
+        operable: canOperate(def),
+      })),
+    };
   }
 
   pause(): void {

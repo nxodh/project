@@ -139,7 +139,7 @@ export class Enemy {
   }
 }
 
-/** 웨이브 배율·정예 여부를 반영한 능력치. 보스 체력은 몇 번째 보스인지(웨이브/5)에 따라 오른다. */
+/** 웨이브 배율·정예 여부를 반영한 능력치. 보스 체력은 웨이브가 오를수록 완만하게 오른다. */
 export function scaledStats(kind: EnemyKind, wave: number, elite: boolean): EnemyScaledStats {
   const base = ENEMIES[kind];
   const eliteHp = elite ? 2.1 : 1;
@@ -149,7 +149,7 @@ export function scaledStats(kind: EnemyKind, wave: number, elite: boolean): Enem
   const fireBase = kind === 'ranged' || kind === 'sine' || kind === 'lobber' ? ENEMIES[kind].fireInterval : 2;
   const hp =
     kind === 'boss'
-      ? base.hp * WAVES.bossHpMultiplier(Math.max(1, Math.round(wave / WAVES.bossEvery)))
+      ? base.hp * WAVES.bossHpMultiplier(Math.max(1, wave))
       : base.hp * WAVES.hpMultiplier(wave) * eliteHp;
   return {
     hp: Math.round(hp),

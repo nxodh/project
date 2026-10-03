@@ -2,7 +2,7 @@ import { WEAPON_TUNING } from '../config';
 import { registerWeapon } from './registry';
 
 /*
- * 플레이어 함수 무기 9종(등록 순서 = 숫자 키 1~9). 정의역·함수식은 곡선 모양을,
+ * 플레이어 함수 무기 8종(인벤토리 카탈로그 순서). 정의역·함수식은 곡선 모양을,
  * WEAPON_TUNING(config.ts)은 전투 수치를 정한다. 모든 곡선은 정의역 시작점이 총구에 오도록 평행 이동된다.
  * 화면은 흑백이므로 무기는 색이 아니라 곡선의 모양으로 구분한다.
  */
@@ -19,6 +19,9 @@ registerWeapon({
   color: WHITE,
   domain: [0, 1],
   fn: (x) => x,
+  derivative: { fn: () => 1, formula: 'y′ = 1' },
+  integral: { fn: (x) => (x * x) / 2, formula: 'y = x²/2 + C' },
+  limitDomain: [0, 2],
   tuning: WEAPON_TUNING.linear,
 });
 
@@ -35,6 +38,9 @@ registerWeapon({
   color: WHITE,
   domain: [-1, 1],
   fn: (x) => -(x * x),
+  derivative: { fn: (x) => -2 * x, formula: 'y′ = −2x' },
+  integral: { fn: (x) => -(x * x * x) / 3, formula: 'y = −x³/3 + C' },
+  limitDomain: [-1.6, 1.6],
   tuning: WEAPON_TUNING.quadratic,
 });
 
@@ -48,12 +54,15 @@ registerWeapon({
   color: WHITE,
   domain: [0, 4 * Math.PI],
   fn: (x) => Math.sin(x),
+  derivative: { fn: (x) => Math.cos(x), formula: 'y′ = cos x' },
+  integral: { fn: (x) => -Math.cos(x), formula: 'y = −cos x + C' },
+  limitDomain: [0, 6 * Math.PI],
   tuning: WEAPON_TUNING.sine,
 });
 
-// ④ 절댓값함수 y = |x|,  x∈[−0.5, 1]
-// 꼭짓점 x=0이 정의역 안(전체의 1/3 지점)에 있어 V자 꺾임이 공격 구간 안에서 보인다.
-// 시작점 (−0.5, 0.5)을 총구로 옮기므로 조준축 아래로 A만큼 내려갔다가 꺾여 위로 A만큼 솟는다.
+// ④ 절댓값함수 y = |x|,  x∈[−1, 1]
+// 꼭짓점 x=0이 정확히 한가운데에 있는 좌우 대칭 V자. 조준축 아래로 내려갔다가 꺾여 같은 높이로 돌아오므로
+// 끝점이 커서 위에 놓이고, 꺾임이 공격 구간 한가운데에서 보인다.
 registerWeapon({
   id: 'abs',
   name: '절댓값함수',
@@ -61,8 +70,11 @@ registerWeapon({
   formula: 'y = |x|',
   role: '넓고 두꺼운 V자 판정 · 강한 넉백(공격 준비 끊기) · 긴 대기시간',
   color: WHITE,
-  domain: [-0.5, 1],
+  domain: [-1, 1],
   fn: (x) => Math.abs(x),
+  derivative: { fn: (x) => Math.sign(x), formula: 'y′ = sgn x' },
+  integral: { fn: (x) => (x * Math.abs(x)) / 2, formula: 'y = x|x|/2 + C' },
+  limitDomain: [-0.5, 2],
   tuning: WEAPON_TUNING.abs,
 });
 
@@ -78,6 +90,9 @@ registerWeapon({
   color: WHITE,
   domain: [0, 4],
   fn: (x) => Math.exp(x) - 1,
+  derivative: { fn: (x) => Math.exp(x), formula: 'y′ = eˣ' },
+  integral: { fn: (x) => Math.exp(x) - x, formula: 'y = eˣ − x + C' },
+  limitDomain: [0, 6],
   tuning: WEAPON_TUNING.exp,
 });
 
@@ -92,40 +107,30 @@ registerWeapon({
   color: WHITE,
   domain: [0.05, 3],
   fn: (x) => Math.log(x),
+  derivative: { fn: (x) => 1 / x, formula: 'y′ = 1/x' },
+  integral: { fn: (x) => x * Math.log(x) - x, formula: 'y = x ln x − x + C' },
+  limitDomain: [0.002, 3],
   tuning: WEAPON_TUNING.log,
 });
 
-// ⑦ 계단함수(바닥함수) y = ⌊x⌋,  x∈[0, 3.999] → 계단 3칸
-// 끝이 커서 쪽으로 정렬되므로 비스듬히 올라가는 계단이 된다: 수평으로 훑고 수직으로 한 칸씩 올라가는 구간이 번갈아 나온다.
-// 지수·로그와 달리 부드러운 곡선이 아니라 '꺾이는 층'이라, 높이가 다른 적을 차례로 훑는다.
-registerWeapon({
-  id: 'floor',
-  name: '계단함수',
-  shape: '계단',
-  formula: 'y = ⌊x⌋',
-  role: '층층이 올라가는 계단 · 높이가 다른 적과 발판 위 적을 차례로 훑음',
-  color: WHITE,
-  domain: [0, 3.999],
-  fn: (x) => Math.floor(x),
-  tuning: WEAPON_TUNING.floor,
-});
-
-// ⑧ 원의 방정식(윗반원) y = √(1 − x²),  x∈[−1, 1]
-// 폭 = 높이의 2배인 진짜 반원: 양 끝이 수직인 둥근 돔. 포물선(②)의 길고 낮은 포물선과 달리 짧고 높고 둥글다.
-// 짧은 거리를 두껍게 덮고 낮은 장애물 너머를 친다.
+// ⑦ 원의 방정식 x² + y² = 1 (온전한 원)
+// 총구와 커서를 지름의 양 끝으로 하는 원을 한 바퀴 그린다. 커서가 가까우면 작은 원, 멀면 큰 원(최대 지름 = 사거리).
+// 함수 그래프로는 나타낼 수 없으므로 매개변수 곡선(trace)으로 정의하고, fn은 위쪽 반원(HUD 아이콘·정의역 검사용)이다.
+// 원은 가운데가 비어 있어 안쪽 적은 맞지 않고 테두리가 지나가는 적만 맞는다. 둘러싸인 적을 한꺼번에 친다.
 registerWeapon({
   id: 'circle',
-  name: '원(반원)',
-  shape: '아치',
-  formula: 'y = √(1 − x²)',
-  role: '근거리 아치 · 두꺼운 판정 · 엄폐물 너머 타격',
+  name: '원',
+  shape: '온전한 원',
+  formula: 'x² + y² = 1',
+  role: '총구~커서를 지름으로 한 바퀴 · 테두리가 지나는 모든 적 타격 · 두꺼운 판정',
   color: WHITE,
   domain: [-1, 1],
   fn: (x) => Math.sqrt(Math.max(0, 1 - x * x)),
+  trace: (t) => ({ u: (1 - Math.cos(2 * Math.PI * t)) / 2, v: Math.sin(2 * Math.PI * t) }),
   tuning: WEAPON_TUNING.circle,
 });
 
-// ⑨ 탄젠트함수 y = tan x,  x∈[−1.3, 1.3]
+// ⑧ 탄젠트함수 y = tan x,  x∈[−1.3, 1.3]
 // 점근선 근처인 양 끝에서 수직에 가깝게 솟고 가운데는 완만한 Z자. 위아래 넓은 범위를 한 번에 쓴다.
 registerWeapon({
   id: 'tan',
@@ -136,5 +141,8 @@ registerWeapon({
   color: WHITE,
   domain: [-1.3, 1.3],
   fn: (x) => Math.tan(x),
+  derivative: { fn: (x) => 1 / Math.cos(x) ** 2, formula: 'y′ = sec²x' },
+  integral: { fn: (x) => -Math.log(Math.abs(Math.cos(x))), formula: 'y = −ln|cos x| + C' },
+  limitDomain: [-1.5, 1.5],
   tuning: WEAPON_TUNING.tan,
 });
