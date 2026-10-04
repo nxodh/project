@@ -16,6 +16,8 @@ export interface Body {
   /** 이번 스텝에 옆 벽에 막혔으면 막힌 방향(-1 왼쪽, 1 오른쪽). */
   wallDir: -1 | 0 | 1;
   hitCeiling: boolean;
+  /** true면 바닥하고만 충돌한다(발판을 통과하는 거대한 보스). */
+  groundOnly?: boolean;
 }
 
 export function makeBody(x: number, y: number, w: number, h: number): Body {
@@ -45,7 +47,8 @@ export function moveBody(b: Body, arena: Arena, dt: number, gravityScale = 1): v
   // X축: 수평으로 움직였을 때만 그 반대 방향으로 밀어낸다(정지 상태의 겹침은 Y축에서 처리).
   if (b.vx !== 0) {
     b.x += b.vx * dt;
-    for (const s of arena.solids) {
+    for (const s of arena.solidsIn(b.x - b.w, b.x + b.w)) {
+      if (b.groundOnly && s.kind !== 'ground') continue;
       const r = bodyRect(b);
       if (r.x < s.x + s.w && r.x + r.w > s.x && r.y < s.y + s.h && r.y + r.h > s.y) {
         if (b.vx > 0) {
@@ -64,7 +67,8 @@ export function moveBody(b: Body, arena: Arena, dt: number, gravityScale = 1): v
   // Y축
   b.grounded = false;
   b.y += b.vy * dt;
-  for (const s of arena.solids) {
+  for (const s of arena.solidsIn(b.x - b.w, b.x + b.w)) {
+    if (b.groundOnly && s.kind !== 'ground') continue;
     const r = bodyRect(b);
     if (r.x < s.x + s.w && r.x + r.w > s.x && r.y < s.y + s.h && r.y + r.h > s.y) {
       if (b.vy >= 0) {

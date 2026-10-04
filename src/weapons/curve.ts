@@ -1,6 +1,6 @@
-import { COMBAT } from '../config';
+import { COMBAT, REACH_MIN_SCALE } from '../config';
 import type { Vec2 } from '../core/geometry';
-import type { Arena } from '../world/arena';
+import type { Arena, Solid } from '../world/arena';
 import type { FunctionWeaponDef } from './types';
 
 /** 로컬 좌표계의 곡선 샘플. lx는 조준 방향(전방), ly는 수학적 위쪽(+). 단위는 px. */
@@ -10,6 +10,12 @@ export interface LocalCurve {
   n: number;
   /** 곡선 전체 길이(px). */
   length: number;
+  /**
+   * 조준점: 커서에 닿게 할 곡선 위의 점(로컬 좌표). 일반 함수는 끝점,
+   * 닫힌 도형(원)은 총구에서 가장 먼 점이다.
+   */
+  aimX: number;
+  aimY: number;
 }
 
 const FINE_SAMPLES = 2048;
@@ -20,29 +26,42 @@ const cache = new Map<FunctionWeaponDef, { key: string; curve: LocalCurve }>();
  * 촘촘하게 샘플링한 뒤 곡선 길이 기준으로 일정 간격(sampleSpacing)으로 다시 나눠
  * 급하게 휘는 구간(지수함수 끝부분 등)도 선분이 길어지지 않게 한다.
  */
-export function computeLocalCurve(def: FunctionWeaponDef, spacing: number = COMBAT.sampleSpacing): LocalCurve {
+export function computeLocalCurve(
+  def: FunctionWeaponDef,
+  spacing: number = COMBAT.sampleSpacing,
+  range: number = def.tuning.range,
+): LocalCurve {
   const [x0, x1] = def.domain;
   const f0 = def.fn(x0);
-  const { range: L, amplitude: A } = def.tuning;
-
-  const fineY = new Float64Array(FINE_SAMPLES + 1);
-  let yRef = 0;
-  for (let i = 0; i <= FINE_SAMPLES; i++) {
-    const t = i / FINE_SAMPLES;
-    const v = def.fn(x0 + t * (x1 - x0)) - f0;
-    fineY[i] = v;
-    if (Math.abs(v) > yRef) yRef = Math.abs(v);
-  }
-  const yScale = yRef > 1e-12 ? A / yRef : 0;
+  const L = range;
+  const A = def.tuning.amplitude;
 
   const fx = new Float64Array(FINE_SAMPLES + 1);
   const fy = new Float64Array(FINE_SAMPLES + 1);
   const fcum = new Float64Array(FINE_SAMPLES + 1);
-  for (let i = 0; i <= FINE_SAMPLES; i++) {
-    fx[i] = (L * i) / FINE_SAMPLES;
-    fy[i] = fineY[i] * yScale;
-    if (i > 0) fcum[i] = fcum[i - 1] + Math.hypot(fx[i] - fx[i - 1], fy[i] - fy[i - 1]);
+  if (def.trace) {
+    // 매개변수 곡선: lx = L·u(t), ly = A·v(t)
+    for (let i = 0; i <= FINE_SAMPLES; i++) {
+      const { u, v } = def.trace(i / FINE_SAMPLES);
+      fx[i] = L * u;
+      fy[i] = A * v;
+    }
+  } else {
+    const fineY = new Float64Array(FINE_SAMPLES + 1);
+    let yRef = 0;
+    for (let i = 0; i <= FINE_SAMPLES; i++) {
+      const t = i / FINE_SAMPLES;
+      const v = def.fn(x0 + t * (x1 - x0)) - f0;
+      fineY[i] = v;
+      if (Math.abs(v) > yRef) yRef = Math.abs(v);
+    }
+    const yScale = yRef > 1e-12 ? A / yRef : 0;
+    for (let i = 0; i <= FINE_SAMPLES; i++) {
+      fx[i] = (L * i) / FINE_SAMPLES;
+      fy[i] = fineY[i] * yScale;
+    }
   }
+  for (let i = 1; i <= FINE_SAMPLES; i++) fcum[i] = fcum[i - 1] + Math.hypot(fx[i] - fx[i - 1], fy[i] - fy[i - 1]);
   const total = fcum[FINE_SAMPLES];
   const n = Math.max(2, Math.ceil(total / spacing) + 1);
   const lx = new Float64Array(n);
@@ -60,12 +79,65 @@ export function computeLocalCurve(def: FunctionWeaponDef, spacing: number = COMB
   ly[0] = 0;
   let length = 0;
   for (let k = 1; k < n; k++) length += Math.hypot(lx[k] - lx[k - 1], ly[k] - ly[k - 1]);
-  return { lx, ly, n, length };
+  // 조준점: 열린 곡선은 끝점, 닫힌 도형은 총구에서 가장 먼 점
+  let aimX = lx[n - 1];
+  let aimY = ly[n - 1];
+  if (def.trace) {
+    let far = -1;
+    for (let k = 0; k < n; k++) {
+      const d = Math.hypot(lx[k], ly[k]);
+      if (d > far) {
+        far = d;
+        aimX = lx[k];
+        aimY = ly[k];
+      }
+    }
+  }
+  return { lx, ly, n, length, aimX, aimY };
 }
 
-/** 무기별 로컬 곡선(수치가 바뀌면 다시 계산). */
-export function getLocalCurve(def: FunctionWeaponDef): LocalCurve {
+/** 곡선 전체를 비율 s로 줄인다(모양은 그대로, 끝점이 커서에 닿도록). */
+export function scaleLocalCurve(c: LocalCurve, s: number): LocalCurve {
+  if (s === 1) return c;
+  const lx = new Float64Array(c.n);
+  const ly = new Float64Array(c.n);
+  for (let i = 0; i < c.n; i++) {
+    lx[i] = c.lx[i] * s;
+    ly[i] = c.ly[i] * s;
+  }
+  return { lx, ly, n: c.n, length: c.length * s, aimX: c.aimX * s, aimY: c.aimY * s };
+}
+
+/**
+ * 커서까지의 거리(reach)에 맞춘 축소 비율. 조준점이 커서에 닿도록 1 이하로 줄이고,
+ * 너무 가까워도 REACH_MIN_SCALE 밑으로는 줄이지 않는다. 사거리를 넘는 먼 커서는 1(전체 길이)이다.
+ */
+export function reachScale(def: FunctionWeaponDef, reach: number, range?: number): number {
+  const c = getLocalCurve(def, range);
+  const chord = Math.hypot(c.aimX, c.aimY);
+  if (chord < 1e-6) return 1;
+  return Math.min(1, Math.max(REACH_MIN_SCALE, reach / chord));
+}
+
+const rangedCache = new Map<string, LocalCurve>();
+
+/**
+ * 무기별 로컬 곡선(수치가 바뀌면 다시 계산).
+ * range를 주면 그 사거리로 만든다(적의 포물선처럼 목표 거리에 맞춰 길이가 바뀌는 패턴). 10px 단위로 캐시한다.
+ */
+export function getLocalCurve(def: FunctionWeaponDef, range?: number): LocalCurve {
   const t = def.tuning;
+  if (range !== undefined && Math.abs(range - t.range) > 0.5) {
+    const r = Math.max(20, Math.round(range / 10) * 10);
+    const key = `${def.id}|${def.domain[0]}|${def.domain[1]}|${r}|${t.amplitude}|${COMBAT.sampleSpacing}`;
+    let c = rangedCache.get(key);
+    if (!c) {
+      c = computeLocalCurve(def, COMBAT.sampleSpacing, r);
+      if (rangedCache.size > 400) rangedCache.clear();
+      rangedCache.set(key, c);
+    }
+    return c;
+  }
   const key = `${def.domain[0]}|${def.domain[1]}|${t.range}|${t.amplitude}|${COMBAT.sampleSpacing}`;
   const hit = cache.get(def);
   if (hit && hit.key === key) return hit.curve;
@@ -104,6 +176,33 @@ export function makeAimFrame(
   return { ox: origin.x, oy: origin.y, fx, fy, nx, ny };
 }
 
+const ALIGN_MIN_RATIO = 0.01;
+
+/**
+ * 곡선의 조준점(끝점 또는 원의 먼 점)이 조준선(총구→커서) 위에 오도록 조준 좌표계를 돌린다.
+ * 지수·로그·탄젠트처럼 끝이 조준축에서 멀리 벗어나는 함수도 '커서 쪽으로 뻗는다'는 느낌을 유지한다.
+ * 조준점이 이미 축 위에 있으면(직선·사인·포물선·원·절댓값 등) 돌리지 않는다.
+ * 미리보기와 발사가 모두 이 함수를 거치므로 두 경로는 여전히 같다.
+ */
+export function makeEndAlignedFrame(def: FunctionWeaponDef, origin: Vec2, dir: Vec2, range?: number): AimFrame {
+  const local = getLocalCurve(def, range);
+  const ex = local.aimX;
+  const ey = local.aimY;
+  let frame = makeAimFrame(origin, dir);
+  if (Math.abs(ey) < ALIGN_MIN_RATIO * Math.abs(ex)) return frame;
+  const target = Math.atan2(dir.y, dir.x);
+  // 왼쪽을 볼 때의 거울 반전 때문에 한 번에 안 맞을 수 있어 몇 번 보정한다.
+  for (let k = 0; k < 4; k++) {
+    const end = localToWorld(frame, ex, ey);
+    let delta = Math.atan2(end.y - origin.y, end.x - origin.x) - target;
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+    if (Math.abs(delta) < 1e-4) break;
+    const a = Math.atan2(frame.fy, frame.fx) - delta;
+    frame = makeAimFrame(origin, { x: Math.cos(a), y: Math.sin(a) });
+  }
+  return frame;
+}
+
 export function localToWorld(frame: AimFrame, lx: number, ly: number): Vec2 {
   return {
     x: frame.ox + frame.fx * lx + frame.nx * ly,
@@ -139,8 +238,11 @@ export function buildCurvePath(
   frame: AimFrame,
   arena: Arena,
   guard?: Vec2,
+  range?: number,
+  blocks?: (s: Solid) => boolean,
+  scale = 1,
 ): CurvePath {
-  const local = getLocalCurve(def);
+  const local = scaleLocalCurve(getLocalCurve(def, range), scale);
   const xs = new Float64Array(local.n);
   const ys = new Float64Array(local.n);
   const cum = new Float64Array(local.n);
@@ -162,7 +264,7 @@ export function buildCurvePath(
     if (y > maxY) maxY = y;
   };
 
-  const guardHit = guard ? arena.raycast(guard.x, guard.y, frame.ox, frame.oy) : null;
+  const guardHit = guard ? arena.raycast(guard.x, guard.y, frame.ox, frame.oy, blocks) : null;
   if (guardHit) {
     push(guardHit.x, guardHit.y);
     blocked = true;
@@ -173,7 +275,7 @@ export function buildCurvePath(
       const wy = frame.oy + frame.fy * local.lx[i] + frame.ny * local.ly[i];
       const px = xs[count - 1];
       const py = ys[count - 1];
-      const hit = arena.raycast(px, py, wx, wy);
+      const hit = arena.raycast(px, py, wx, wy, blocks);
       if (hit) {
         if (hit.t > 0) push(hit.x, hit.y);
         blocked = true;

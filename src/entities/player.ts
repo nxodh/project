@@ -18,8 +18,11 @@ export class Player {
   coyote = 0;
   jumpBuffer = 0;
   jumpHeld = false;
+  /** 선택된 핫바 슬롯. */
   weaponIndex = 0;
-  /** 무기별 남은 재사용 대기시간. */
+  /** 어깨 → 커서 거리(곡선의 끝점이 커서에 닿도록 곡선 크기를 정한다). 조준을 갱신하기 전에는 무한대. */
+  aimDist = Infinity;
+  /** 슬롯별 남은 재사용 대기시간. */
   cooldowns: number[] = [];
   /** 무기를 바꿔 가며 쏠 때도 적용되는 최소 간격. */
   globalCooldown = 0;
@@ -28,9 +31,9 @@ export class Player {
   /** 최근 밟고 있던 면(적 내비게이션의 목표). */
   lastSurfaceId = -1;
 
-  constructor(x: number, y: number, weaponCount: number) {
+  constructor(x: number, y: number, slotCount: number) {
     this.body = makeBody(x, y, PLAYER.width, PLAYER.standHeight);
-    this.cooldowns = new Array<number>(weaponCount).fill(0);
+    this.cooldowns = new Array<number>(slotCount).fill(0);
   }
 
   /** 조준 회전 중심(어깨). 숙이면 낮아지고 약간 앞으로 나온다. */

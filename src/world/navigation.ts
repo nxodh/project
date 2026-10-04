@@ -1,4 +1,4 @@
-import { ENEMIES, PHYSICS } from '../config';
+import { ENEMIES, PHYSICS, TERRAIN } from '../config';
 import type { Arena } from './arena';
 
 /** 밟고 설 수 있는 지형 윗면. */
@@ -37,31 +37,68 @@ const DROP_REACH = 70;
 
 /**
  * 지형 윗면들을 노드로, 점프/낙하 가능 여부를 간선으로 하는 간단한 내비게이션 그래프.
- * 아레나는 고정이므로 모든 쌍의 다음 경유지를 미리 BFS로 계산해 둔다.
+ * 지형이 무한히 이어지므로 플레이어 주변 청크 범위(window)만으로 만들고,
+ * 플레이어가 다른 청크로 넘어가면 다시 만든다. 이어 붙은 바닥 조각은 하나의 면으로 합친다.
+ * 범위 안의 모든 쌍에 대해 최소 이동 횟수를 BFS로 미리 계산해 둔다.
  */
 export class NavGraph {
-  readonly surfaces: Surface[] = [];
-  readonly links: NavLink[][] = [];
+  surfaces: Surface[] = [];
+  links: NavLink[][] = [];
   private dist: number[][] = [];
+  /** 현재 그래프가 다루는 x 범위. */
+  windowX1 = 0;
+  windowX2 = 0;
+  private builtKey = '';
 
   constructor(private readonly arena: Arena) {
-    for (const s of arena.solids) {
+    this.ensureAround(0);
+  }
+
+  /**
+   * x를 중심으로 한 청크 범위의 그래프가 준비되어 있게 한다. 새로 만들었으면 true.
+   * (면 id가 바뀌므로 호출한 쪽에서 저장해 둔 면 id를 다시 계산해야 한다.)
+   */
+  ensureAround(x: number): boolean {
+    const W = TERRAIN.chunkWidth;
+    const k = Math.floor(x / W);
+    const k1 = k - TERRAIN.navChunkRadius;
+    const k2 = k + TERRAIN.navChunkRadius;
+    const x1 = k1 * W;
+    const x2 = (k2 + 1) * W;
+    // 범위 안 청크를 먼저 만들어 둔다(arena.version이 바뀔 수 있음).
+    const solids = this.arena.solidsIn(x1, x2 - 1);
+    const key = `${k1}:${k2}:${this.arena.version}`;
+    if (key === this.builtKey) return false;
+    this.builtKey = key;
+    this.windowX1 = x1;
+    this.windowX2 = x2;
+
+    const raw: Array<{ x1: number; x2: number; y: number }> = [];
+    for (const s of solids) {
       if (!s.walkable) continue;
-      const x1 = Math.max(s.x, arena.innerLeft);
-      const x2 = Math.min(s.x + s.w, arena.innerRight);
-      if (x2 - x1 < 40) continue;
-      this.surfaces.push({ id: this.surfaces.length, x1, x2, y: s.y });
+      const a = Math.max(s.x, x1);
+      const b = Math.min(s.x + s.w, x2);
+      if (b - a >= 40) raw.push({ x1: a, x2: b, y: s.y });
     }
-    for (const a of this.surfaces) {
+    raw.sort((p, q) => p.y - q.y || p.x1 - q.x1);
+    const merged: Array<{ x1: number; x2: number; y: number }> = [];
+    for (const r of raw) {
+      const last = merged[merged.length - 1];
+      if (last && Math.abs(last.y - r.y) < 0.5 && r.x1 <= last.x2 + 0.5) last.x2 = Math.max(last.x2, r.x2);
+      else merged.push({ ...r });
+    }
+    this.surfaces = merged.map((m, id) => ({ id, ...m }));
+    this.links = this.surfaces.map((a) => {
       const out: NavLink[] = [];
       for (const b of this.surfaces) {
         if (a === b) continue;
         const kind = this.linkKind(a, b);
         if (kind) out.push({ to: b.id, kind });
       }
-      this.links.push(out);
-    }
+      return out;
+    });
     this.buildNextTable();
+    return true;
   }
 
   private linkKind(a: Surface, b: Surface): LinkKind | null {
@@ -112,6 +149,16 @@ export class NavGraph {
     for (const s of this.surfaces) {
       if (Math.abs(feetY - s.y) > 3) continue;
       if (x + halfWidth < s.x1 || x - halfWidth > s.x2) continue;
+      if (!best || s.y < best.y) best = s;
+    }
+    return best;
+  }
+
+  /** (x, y)에서 아래쪽으로 가장 가까운 면(공중에 있을 때 목표 면을 정하는 데 쓴다). */
+  surfaceBelow(x: number, y: number): Surface | null {
+    let best: Surface | null = null;
+    for (const s of this.surfaces) {
+      if (x < s.x1 || x > s.x2 || s.y < y - 3) continue;
       if (!best || s.y < best.y) best = s;
     }
     return best;

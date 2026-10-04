@@ -1,18 +1,17 @@
-import { FX, STEP } from '../config';
+import { KEYS, STEP } from '../config';
 import type { Vec2 } from '../core/geometry';
 import type { Input } from '../core/input';
 import { FixedStepper } from '../core/loop';
 import type { View } from '../core/view';
 import type { Renderer } from '../render/renderer';
+import type { InventoryModel } from '../ui/inventory';
 import type { Overlays } from '../ui/overlays';
-import { updateAttacks, updateBullets } from './combat';
-import { updateEnemies } from './enemyAI';
-import { updateAim, updatePlayer } from './playerSystem';
-import { canFire, computeAttackPath, updateWeapons } from './weaponSystem';
-import { updateWaves } from './waves';
+import { updateAim } from './playerSystem';
+import { stepWorld } from './simulation';
+import { canFire, computeAttackPath, equipWeapon, evolveWeapon } from './weaponSystem';
 import { World } from './world';
 
-export type GameState = 'title' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'title' | 'playing' | 'paused' | 'inventory' | 'gameover';
 
 const BEST_KEY = 'fx-arena-best-score';
 
@@ -45,6 +44,8 @@ export class Game {
   totalSteps = 0;
   /** 시간 배율(디버그·테스트용, 0이면 정지 상태에서 수동 스텝만 진행). */
   timeScale = 1;
+  /** 지형 시드를 고정한다(디버그·테스트용, null이면 판마다 무작위). */
+  seed: number | null = null;
   private readonly stepper = new FixedStepper();
 
   constructor(
@@ -59,73 +60,78 @@ export class Game {
     ui.onStart = () => this.startNewRun();
     ui.onRestart = () => this.startNewRun();
     ui.onResume = () => this.resume();
+    ui.inventory.onClose = () => this.closeInventory();
+    ui.inventory.onEquip = (slot, id) => {
+      if (equipWeapon(this.world, slot, id)) this.refreshInventory();
+    };
+    ui.inventory.onEvolve = (id, op) => {
+      const r = evolveWeapon(this.world, id, op);
+      if (r.ok) this.refreshInventory(r.unlocked);
+    };
     ui.showStart();
   }
 
-  /** 마우스 커서의 월드 좌표. 렌더링과 같은 뷰 변환을 사용한다. */
-  aimPoint(): Vec2 {
+  /** 마우스 커서의 논리 화면 좌표(카메라와 무관). */
+  aimView(): Vec2 {
     if (!this.input.hasMouse) {
       const p = this.world.player;
-      return { x: p.body.x + p.facing * 300, y: p.body.y - 68 };
+      return { x: p.body.x + p.facing * 300 - this.world.camera.x, y: p.body.y - 68 - this.world.camera.y };
     }
-    return this.view.clientToWorld(this.input.mouseClientX, this.input.mouseClientY);
+    return this.view.clientToView(this.input.mouseClientX, this.input.mouseClientY);
+  }
+
+  /** 마우스 커서의 월드 좌표 = 화면 좌표 + 카메라. 렌더링과 같은 변환을 사용한다. */
+  aimPoint(): Vec2 {
+    return this.world.viewToWorld(this.aimView());
   }
 
   frame(frameDt: number): void {
     this.view.sync();
     this.clock += Math.min(frameDt, 0.1);
 
-    if (this.input.consumePress('Escape')) {
+    if (this.input.consumePress(KEYS.pause)) {
       if (this.state === 'playing') this.pause();
       else if (this.state === 'paused') this.resume();
+      else if (this.state === 'inventory') this.closeInventory();
+    }
+    if (this.input.consumePress(KEYS.inventory)) {
+      if (this.state === 'playing') this.openInventory();
+      else if (this.state === 'inventory') this.closeInventory();
     }
 
-    const aim = this.aimPoint();
+    const aimView = this.aimView();
     if (this.state === 'playing') {
-      updateAim(this.world.player, aim);
-      this.stepper.advance(frameDt * this.timeScale, (dt) => this.step(dt, aim));
+      updateAim(this.world.player, this.world.viewToWorld(aimView));
+      this.stepper.advance(frameDt * this.timeScale, (dt) => this.step(dt, aimView));
     } else {
       this.input.clearPresses();
     }
-    this.render(aim);
+    this.render(aimView);
   }
 
   /** 현재 조준으로 고정 스텝을 n번 실행한다(디버그·테스트용). */
   stepManually(n: number): void {
-    const aim = this.aimPoint();
-    for (let i = 0; i < n && this.state === 'playing'; i++) this.step(STEP, aim);
+    const aimView = this.aimView();
+    for (let i = 0; i < n && this.state === 'playing'; i++) this.step(STEP, aimView);
   }
 
-  /** 고정 스텝 하나. */
-  step(dt: number, aim: Vec2): void {
+  /** 고정 스텝 하나. aimView는 커서의 화면 좌표(카메라가 움직이면 월드 조준점도 함께 움직인다). */
+  step(dt: number, aimView: Vec2): void {
     const w = this.world;
     this.totalSteps++;
-    w.time += dt;
-    updateAim(w.player, aim);
-    updatePlayer(w, this.input, dt);
-    updateWeapons(w, this.input, dt);
-    updateEnemies(w, dt);
-    updateAttacks(w, dt);
-    updateBullets(w, dt);
-    updateWaves(w, dt);
-    w.fx.update(dt);
-    w.shake = Math.max(0, w.shake - w.shake * FX.shakeDecay * dt - 0.5 * dt);
-    if (w.banner) {
-      w.banner.age += dt;
-      if (w.banner.age >= w.banner.duration) w.banner = null;
-    }
+    stepWorld(w, this.input, w.viewToWorld(aimView), dt);
     if (w.gameOverTimer > 0) {
       w.gameOverTimer -= dt;
       if (w.gameOverTimer <= 0) this.gameOver();
     }
   }
 
-  private render(aim: Vec2): void {
+  private render(aimView: Vec2): void {
     const w = this.world;
     const playing = this.state === 'playing';
     const showAim = (playing || this.state === 'paused') && w.player.alive;
     this.renderer.render(w, {
-      aim,
+      aimView,
       preview: showAim ? computeAttackPath(w) : null,
       previewReady: canFire(w),
       showCrosshair: playing && this.input.hasMouse,
@@ -135,11 +141,40 @@ export class Game {
   }
 
   startNewRun(): void {
-    this.world = new World();
+    this.world = new World(this.seed ?? undefined);
     this.input.reset();
     this.stepper.reset();
     this.state = 'playing';
     this.ui.hideAll();
+  }
+
+  /** 인벤토리를 연다(게임은 멈춘다). */
+  openInventory(): void {
+    if (this.state !== 'playing' || !this.world.player.alive) return;
+    this.state = 'inventory';
+    this.input.reset();
+    this.ui.showInventory(this.inventoryModel());
+  }
+
+  closeInventory(): void {
+    if (this.state !== 'inventory') return;
+    this.state = 'playing';
+    this.input.reset();
+    this.stepper.reset();
+    this.ui.hideAll();
+  }
+
+  private refreshInventory(justUnlocked?: string): void {
+    if (this.state === 'inventory') this.ui.inventory.render(this.inventoryModel(), justUnlocked);
+  }
+
+  inventoryModel(): InventoryModel {
+    const w = this.world;
+    return {
+      evoPoints: w.evoPoints,
+      slots: w.loadout.map((_s, index) => ({ index, def: w.slotWeapon(index), current: index === w.player.weaponIndex })),
+      weapons: w.weapons.map((def) => ({ def, owned: w.owned.has(def.id), slot: w.loadout.findIndex((s) => s.weaponId === def.id) })),
+    };
   }
 
   pause(): void {
@@ -171,6 +206,7 @@ export class Game {
       best: Math.max(prevBest, w.score),
       newBest: newBest && w.score > 0,
       accuracy: w.stats.shots > 0 ? Math.round((w.stats.hits / w.stats.shots) * 100) : 0,
+      bosses: w.stats.bossesDefeated,
     });
   }
 }

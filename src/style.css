@@ -1,11 +1,11 @@
 :root {
   color-scheme: dark;
-  --bg: #03050a;
-  --panel: rgba(9, 13, 25, 0.92);
-  --line: rgba(140, 160, 210, 0.25);
-  --text: #e8eefc;
-  --dim: #8d9abb;
-  --accent: #3ad8ff;
+  --bg: #000000;
+  --panel: rgba(0, 0, 0, 0.92);
+  --line: rgba(255, 255, 255, 0.28);
+  --text: #ffffff;
+  --dim: #9a9a9a;
+  --accent: #ffffff;
   --font: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'NanumGothic', system-ui, sans-serif;
   --math: 'Cambria Math', 'STIX Two Math', 'Times New Roman', serif;
 }
@@ -48,7 +48,7 @@ body.playing #game {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(ellipse at center, rgba(3, 5, 10, 0.55), rgba(3, 5, 10, 0.85));
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.88));
   backdrop-filter: blur(2px);
   overflow: auto;
 }
@@ -63,7 +63,7 @@ body.playing #game {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--panel);
-  box-shadow: 0 0 40px rgba(58, 216, 255, 0.08);
+  box-shadow: 0 0 40px rgba(255, 255, 255, 0.06);
   text-align: center;
 }
 
@@ -79,7 +79,8 @@ body.playing #game {
 }
 
 .eyebrow.danger {
-  color: #ff5b6b;
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 h1 {
@@ -189,14 +190,20 @@ button:focus-visible {
 
 button.primary {
   min-width: 200px;
-  border-color: var(--accent);
-  background: rgba(58, 216, 255, 0.14);
-  box-shadow: 0 0 18px rgba(58, 216, 255, 0.2);
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #000000;
+}
+
+button.primary:hover,
+button.primary:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
 }
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   margin: 0 0 12px;
 }
@@ -220,7 +227,7 @@ button.primary {
 
 .best {
   margin: 0 0 18px;
-  color: #ffd23f;
+  color: #ffffff;
   font-size: 14px;
 }
 
@@ -233,5 +240,299 @@ button.primary {
   }
   h1 {
     font-size: 32px;
+  }
+}
+
+/* ── 인벤토리 ───────────────────────────────────────────── */
+.panel.wide {
+  width: min(1040px, 100%);
+  text-align: left;
+}
+
+.inv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inv-head h2 {
+  margin: 0;
+}
+
+.panel.wide h3 {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.dim {
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.inv-slots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.inv-slot,
+.inv-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: center;
+  cursor: pointer;
+}
+
+.inv-slot {
+  min-height: 170px;
+}
+
+.inv-slot.current {
+  border-color: #ffffff;
+  box-shadow: inset 0 0 0 1px #ffffff;
+}
+
+.inv-slot.drop,
+.has-selection .inv-slot:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: #ffffff;
+}
+
+.inv-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inv-card.selected {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.inv-card.selected small,
+.inv-card.selected i {
+  color: #333333;
+}
+
+.inv-card.selected canvas {
+  filter: invert(1);
+}
+
+.thumb {
+  width: 100%;
+  height: 46px;
+  display: block;
+}
+
+.inv-slot b,
+.inv-card b {
+  font-size: 13px;
+}
+
+.inv-slot i,
+.inv-card i {
+  font-family: var(--math);
+  font-size: 13px;
+  color: #dddddd;
+}
+
+.inv-slot small,
+.inv-card small {
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.inv-key {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.inv-card em {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.inv-card.selected em {
+  color: #333333;
+}
+
+.inv-card.locked {
+  cursor: default;
+  opacity: 0.55;
+  border-style: dashed;
+  min-height: 74px;
+  padding: 6px;
+  justify-content: center;
+}
+
+.inv-card.locked small {
+  display: none;
+}
+
+.inv-card.locked .lock {
+  line-height: 28px;
+}
+
+.inv-card.new {
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+.lock {
+  font-size: 28px;
+  line-height: 40px;
+  color: var(--dim);
+}
+
+.ep-line {
+  margin: 6px 0 0;
+  font-size: 15px;
+}
+
+.ep-line b {
+  font-size: 20px;
+}
+
+.inv-bench {
+  padding: 10px 12px;
+  border-left: 3px solid #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+.bench-head {
+  margin-bottom: 8px;
+}
+
+.bench-row {
+  display: grid;
+  grid-template-columns: 64px minmax(160px, 1.2fr) minmax(200px, 1.6fr) 118px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bench-row .op-sym {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.bench-math {
+  font-family: var(--math);
+  font-size: 14px;
+}
+
+.bench-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thumb.mini {
+  width: 84px;
+  height: 36px;
+  flex: none;
+}
+
+.evolve {
+  padding: 6px 8px;
+  border: 1px solid #ffffff;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #000000;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.evolve:disabled {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--dim);
+  cursor: default;
+}
+
+.socket {
+  margin-top: auto;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.socket.filled {
+  border-style: solid;
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 700;
+}
+
+.socket.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.op-sym {
+  font-family: var(--math);
+  font-size: 26px;
+  font-style: italic;
+  line-height: 46px;
+}
+
+.inv-detail {
+  min-height: 74px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+.inv-detail p {
+  margin: 4px 0 0;
+}
+
+.inv-detail i {
+  font-family: var(--math);
+  font-size: 15px;
+}
+
+.hint {
+  color: var(--dim);
+}
+
+@media (max-width: 760px) {
+  .inv-slots {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .bench-row {
+    grid-template-columns: 1fr;
   }
 }

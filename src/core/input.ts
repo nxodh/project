@@ -9,6 +9,7 @@ const GAME_KEYS = new Set([
   'KeyS',
   'Space',
   'Escape',
+  'KeyE',
   'Digit1',
   'Digit2',
   'Digit3',

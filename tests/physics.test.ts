@@ -28,11 +28,11 @@ describe('고정 타임스텝', () => {
       Array.from({ length: 90 }, (_, i) => (i % 3 === 0 ? 1 / 25 : 1 / 90)),
     ];
     for (const frames of frameSets) {
-      const world = new World();
+      const world = new World(1);
       const input = new FakeInput();
       settle(world, input);
       input.press('KeyD');
-      input.press('KeyW');
+      input.press('Space');
       const stepper = new FixedStepper();
       let steps = 0;
       let elapsed = 0;
@@ -49,11 +49,11 @@ describe('고정 타임스텝', () => {
     expect(minSteps).toBeGreaterThanOrEqual(118);
     // 스텝 수를 맞춰 다시 비교: 고정 스텝이므로 결과가 완전히 같아야 한다
     const replay = (steps: number) => {
-      const world = new World();
+      const world = new World(1);
       const input = new FakeInput();
       settle(world, input);
       input.press('KeyD');
-      input.press('KeyW');
+      input.press('Space');
       for (let i = 0; i < steps; i++) updatePlayer(world, input.asInput(), STEP);
       return { x: world.player.body.x, y: world.player.body.y };
     };
@@ -73,7 +73,7 @@ describe('고정 타임스텝', () => {
 
 describe('이동·점프·착지', () => {
   it('A/D로 좌우 이동하고 최고 속도에 도달한다', () => {
-    const world = new World();
+    const world = new World(1);
     const input = new FakeInput();
     settle(world, input);
     const x0 = world.player.body.x;
@@ -86,12 +86,12 @@ describe('이동·점프·착지', () => {
     expect(world.player.body.vx).toBe(0);
   });
 
-  it('W 점프: 최고 높이 ≈ v²/2g, 바닥에 착지', () => {
-    const world = new World();
+  it('Space 점프: 최고 높이 ≈ v²/2g, 바닥에 착지', () => {
+    const world = new World(1);
     const input = new FakeInput();
     settle(world, input);
     const y0 = world.player.body.y;
-    input.press('KeyW');
+    input.press('Space');
     let minY = y0;
     run(world, input, 1.2, () => (minY = Math.min(minY, world.player.body.y)));
     const expected = (PLAYER.jumpVelocity * PLAYER.jumpVelocity) / (2 * PHYSICS.gravity);
@@ -101,22 +101,32 @@ describe('이동·점프·착지', () => {
     expect(world.player.body.y).toBe(y0);
   });
 
-  it('점프 키를 일찍 떼면 낮게 뛴다', () => {
-    const world = new World();
+  it('W 키로는 더 이상 점프하지 않는다(점프 = Space)', () => {
+    const world = new World(1);
     const input = new FakeInput();
     settle(world, input);
     const y0 = world.player.body.y;
     input.press('KeyW');
+    run(world, input, 0.5);
+    expect(world.player.body.y).toBe(y0);
+  });
+
+  it('점프 키를 일찍 떼면 낮게 뛴다', () => {
+    const world = new World(1);
+    const input = new FakeInput();
+    settle(world, input);
+    const y0 = world.player.body.y;
+    input.press('Space');
     let minY = y0;
     run(world, input, 1.2, (t) => {
-      if (t > 0.06) input.release('KeyW');
+      if (t > 0.06) input.release('Space');
       minY = Math.min(minY, world.player.body.y);
     });
     expect(y0 - minY).toBeLessThan(100);
   });
 
   it('이동 방향과 조준 방향은 독립적이다(왼쪽으로 가면서 오른쪽 조준)', () => {
-    const world = new World();
+    const world = new World(1);
     const input = new FakeInput();
     settle(world, input);
     input.press('KeyA');
@@ -129,7 +139,7 @@ describe('이동·점프·착지', () => {
 
 describe('숙이기', () => {
   it('숙이면 실제 피격 영역 높이가 낮아진다', () => {
-    const world = new World();
+    const world = new World(1);
     const input = new FakeInput();
     settle(world, input);
     const standH = world.player.hurtbox().h;
@@ -146,7 +156,7 @@ describe('숙이기', () => {
   });
 
   it('서 있으면 낮은 턱에 막히고, 숙이면 통과하며, 턱 아래서는 일어설 수 없다', () => {
-    const world = new World();
+    const world = new World(1);
     const input = new FakeInput();
     world.player.body.x = 600;
     settle(world, input);
@@ -162,7 +172,7 @@ describe('숙이기', () => {
     // 턱 아래에서 S를 떼도 일어서지 못하고 점프도 못한다
     input.release('KeyD');
     input.release('KeyS');
-    input.press('KeyW');
+    input.press('Space');
     run(world, input, 0.3);
     expect(world.player.crouching).toBe(true);
     expect(world.player.body.y).toBe(world.arena.groundY);

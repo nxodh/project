@@ -1,3 +1,4 @@
+import type { HeadShape } from '../config';
 import type { Vec2 } from '../core/geometry';
 
 export type StickPose = 'stand' | 'run' | 'jump' | 'fall' | 'crouch';
@@ -28,6 +29,8 @@ export interface StickmanOptions {
   blade?: { length: number; color: string };
   /** 머리 내부 채우기 색(배경과 구분). */
   headFill?: string;
+  /** 머리 모양(흑백 화면에서 적 종류를 구분하는 표식). 기본은 속이 빈 원. */
+  headShape?: HeadShape;
   alpha?: number;
 }
 
@@ -203,13 +206,7 @@ export function drawStickman(ctx: CanvasRenderingContext2D, o: StickmanOptions):
   }
 
   // 머리
-  ctx.beginPath();
-  ctx.arc(head.x, head.y, headR, 0, Math.PI * 2);
-  if (o.headFill) {
-    ctx.fillStyle = o.headFill;
-    ctx.fill();
-  }
-  ctx.stroke();
+  drawHead(ctx, head, headR, o.headShape, o.color, o.headFill);
   ctx.restore();
 
   return { head, headR, neck, shoulder, hip, hand, muzzle };
@@ -219,4 +216,62 @@ export function poseFor(grounded: boolean, crouching: boolean, vx: number, vy: n
   if (crouching) return 'crouch';
   if (!grounded) return vy < 0 ? 'jump' : 'fall';
   return Math.abs(vx) > 25 ? 'run' : 'stand';
+}
+
+function drawHead(
+  ctx: CanvasRenderingContext2D,
+  c: Vec2,
+  r: number,
+  shape: HeadShape | undefined,
+  color: string,
+  fill: string | undefined,
+): void {
+  ctx.beginPath();
+  switch (shape) {
+    case 'square':
+      ctx.rect(c.x - r * 0.9, c.y - r * 0.9, r * 1.8, r * 1.8);
+      break;
+    case 'diamond':
+      ctx.moveTo(c.x, c.y - r * 1.2);
+      ctx.lineTo(c.x + r * 1.05, c.y);
+      ctx.lineTo(c.x, c.y + r * 1.2);
+      ctx.lineTo(c.x - r * 1.05, c.y);
+      ctx.closePath();
+      break;
+    case 'triangle':
+      ctx.moveTo(c.x, c.y - r * 1.15);
+      ctx.lineTo(c.x + r * 1.1, c.y + r * 0.85);
+      ctx.lineTo(c.x - r * 1.1, c.y + r * 0.85);
+      ctx.closePath();
+      break;
+    default:
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+  }
+  if (shape === 'filled') {
+    ctx.fillStyle = color;
+    ctx.fill();
+  } else if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  ctx.stroke();
+  if (shape === 'boss') {
+    // 왕관 + 머리 안의 f
+    ctx.beginPath();
+    ctx.moveTo(c.x - r * 0.8, c.y - r * 0.85);
+    ctx.lineTo(c.x - r * 0.9, c.y - r * 1.6);
+    ctx.lineTo(c.x - r * 0.4, c.y - r * 1.15);
+    ctx.lineTo(c.x, c.y - r * 1.75);
+    ctx.lineTo(c.x + r * 0.4, c.y - r * 1.15);
+    ctx.lineTo(c.x + r * 0.9, c.y - r * 1.6);
+    ctx.lineTo(c.x + r * 0.8, c.y - r * 0.85);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = `italic bold ${Math.round(r * 1.2)}px 'Times New Roman', serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('f', c.x, c.y + r * 0.05);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
 }
