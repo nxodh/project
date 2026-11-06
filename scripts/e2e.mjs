@@ -198,16 +198,16 @@ check('마우스 휠로 함수 교체(순환)', w1 === 2 && w2 === 3 && w3 === 2
 const scrollY = await page.evaluate(() => window.scrollY + document.documentElement.scrollTop);
 check('휠 사용 중 페이지 스크롤 없음', scrollY === 0);
 
-// ── 인벤토리(E): 기본 함수 5종으로 시작하고, 진화 작업대에서 미분·적분·극한으로 새 함수를 얻는다
+// ── 인벤토리(E): 기본 함수 6종으로 시작하고, 진화 작업대에서 미분·적분·극한으로 새 함수를 얻는다
 await page.evaluate(() => { __fx.clearEnemies(); __fx.setDebug({ noSpawn: true }); __fx.setTimeScale(1); });
 const own0 = await page.evaluate(() => __fx.owned().sort());
-check('시작: 기본 함수 5종만 보유(일차·절댓값·지수·탄젠트·원)', JSON.stringify(own0) === JSON.stringify(['abs', 'circle', 'exp', 'linear', 'tan']), JSON.stringify(own0));
+check('시작: 기본 함수 6종만 보유(일차·절댓값·지수·탄젠트·원·로그)', JSON.stringify(own0) === JSON.stringify(['abs', 'circle', 'exp', 'linear', 'log', 'tan']), JSON.stringify(own0));
 await page.keyboard.press('KeyE'); await sleep(250);
 let st0 = await snap();
 check('E: 인벤토리 열림 + 게임 정지', st0.state === 'inventory' && await page.isVisible('#overlay-inventory'));
 const tInv = st0.time; await sleep(400);
 check('인벤토리 열려 있는 동안 시간 정지', Math.abs((await snap()).time - tInv) < 0.001);
-check('진화 포인트 3 표시, 미발견 함수는 ? 카드로 가려짐', (await page.textContent('#inv-ep')) === '3' && (await page.locator('[data-locked]').count()) === 16, `EP ${await page.textContent('#inv-ep')}, 잠김 ${await page.locator('[data-locked]').count()}`);
+check('진화 포인트 3 표시, 미발견 함수는 ? 카드로 가려짐', (await page.textContent('#inv-ep')) === '3' && (await page.locator('[data-locked]').count()) === 5, `EP ${await page.textContent('#inv-ep')}, 잠김 ${await page.locator('[data-locked]').count()}`);
 await page.screenshot({ path: `${SP}/shots/13-inventory.png` });
 await page.click('[data-card="weapon:linear"]');
 check('보유 함수를 고르면 진화 작업대에 미분·적분·극한 결과가 나온다', (await page.locator('.bench-row').count()) === 3 && (await page.textContent('#inv-bench')).includes('∫(−x) dx = −x²/2 + C'));
@@ -215,27 +215,28 @@ check('일차함수 미분은 상수라 진화 불가(없음 버튼 비활성)',
 await page.click('button[data-evolve="int"]');
 let own1 = await page.evaluate(() => ({ owned: __fx.owned(), ep: __fx.evoPoints() }));
 check('∫ 진화: 일차함수 → 이차함수 획득, 진화 포인트 1 소모(일차는 그대로)', own1.owned.includes('quadratic') && own1.owned.includes('linear') && own1.ep === 2, JSON.stringify(own1));
-check('새 함수 카드가 도감에 나타난다', (await page.locator('[data-card="weapon:quadratic"]').count()) === 1 && (await page.locator('[data-locked]').count()) === 15);
+check('새 함수 카드가 도감에 나타난다', (await page.locator('[data-card="weapon:quadratic"]').count()) === 1 && (await page.locator('[data-locked]').count()) === 4);
 await page.click('[data-card="weapon:exp"]');
 check('지수함수는 미분·적분해도 자기 자신이라 진화 불가', (await page.locator('.bench-row button:disabled').allTextContents()).filter(t => t === '자기 자신').length === 2);
-await page.click('[data-card="weapon:abs"]');
+await page.click('[data-card="weapon:quadratic"]');
 await page.click('button[data-evolve="lim"]');
 own1 = await page.evaluate(() => ({ owned: __fx.owned(), ep: __fx.evoPoints() }));
-check('lim 진화: 절댓값 → 우물(|x|ⁿ, n→∞), 진화 포인트 2 소모', own1.owned.includes('well') && own1.ep === 0, JSON.stringify(own1));
+check('lim 진화: 이차 −x² → 코사인(테일러 급수의 극한), 진화 포인트 2 소모', own1.owned.includes('cosine') && own1.ep === 0, JSON.stringify(own1));
 check('포인트가 없으면 진화 버튼이 비활성(EP 부족)', (await page.locator('.bench-row button:disabled').allTextContents()).some(t => t.startsWith('EP 부족')));
 await page.screenshot({ path: `${SP}/shots/13b-inventory-evolved.png` });
-await page.click('[data-card="weapon:quadratic"]'); await page.click('[data-slot="1"]');
+// 이차함수 카드는 방금 극한에 쓰느라 이미 골라져 있다(다시 누르면 선택 해제) → 다른 카드를 거쳐 다시 고른다
+await page.click('[data-card="weapon:exp"]'); await page.click('[data-card="weapon:quadratic"]'); await page.click('[data-slot="1"]');
 let lo = await page.evaluate(() => __fx.loadout());
 check('인벤토리: 카드를 고르고 슬롯을 눌러 장착', lo[1].weaponId === 'quadratic' && lo[1].formula === 'y = −x²', JSON.stringify(lo.map(l => l.weaponId)));
 // 드롭 처리: 합성 DragEvent로 시험한다(헤드리스에서는 실제 마우스 드래그의 dragenter/dragover가 오지 않아 검증하지 못함)
 await page.evaluate(() => {
-  const dt = new DataTransfer(); dt.setData('text/plain', 'weapon:well');
+  const dt = new DataTransfer(); dt.setData('text/plain', 'weapon:cosine');
   const slot = document.querySelector('[data-slot="3"]');
   slot.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
   slot.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
 });
 lo = await page.evaluate(() => __fx.loadout());
-check('인벤토리: 슬롯에 카드 드롭(drop 이벤트 처리)', lo[3].weaponId === 'well', JSON.stringify(lo.map(l => l.weaponId)));
+check('인벤토리: 슬롯에 카드 드롭(drop 이벤트 처리)', lo[3].weaponId === 'cosine', JSON.stringify(lo.map(l => l.weaponId)));
 check('미발견 함수는 슬롯에 넣을 수 없다', await page.evaluate(() => __fx.equip(0, 'sine')) === false);
 await page.screenshot({ path: `${SP}/shots/13c-inventory-equipped.png` });
 await page.keyboard.press('KeyE'); await sleep(250);
@@ -295,8 +296,8 @@ s = await snap();
 check('왼쪽(음수 좌표)으로도 지형이 이어진다', s.player.grounded && Math.abs(s.player.y - 820) < 0.01, `x=${s.player.x.toFixed(0)}`);
 await page.screenshot({ path: `${SP}/shots/09c-far-left.png` });
 
-// ── 보스 웨이브
-await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(520, 820); __fx.setDebug({ noSpawn: false, invincible: true }); __fx.startWave(5); });
+// ── 보스 웨이브(웨이브는 보스 한 판뿐: 처치하면 클리어)
+await page.evaluate(() => { __fx.clearEnemies(); __fx.setPlayer(520, 820); __fx.setDebug({ noSpawn: false, invincible: true }); __fx.startWave(1); });
 let bossSeen = null; let bossCast = new Set(); let bossCurves = 0;
 for (let i = 0; i < 90; i++) {
   await sleep(100);
@@ -327,7 +328,20 @@ for (let i = 0; i < 20 && (await snap()).bossesDefeated < 1; i++) {
 }
 s = await snap();
 check('보스 처치 → 보스 처치 수 증가 + 진화 포인트 획득', s.bossesDefeated >= 1 && (await page.evaluate(() => __fx.evoPoints())) >= epBeforeBoss + 1, `bossesDefeated=${s.bossesDefeated} boss=${JSON.stringify(s.boss)} wave=${s.wave}`);
+// 남은 적(부하)까지 정리하면 마지막 웨이브 클리어 → 잠시 뒤 클리어 화면
+await page.evaluate(() => { __fx.world.enemies.forEach(e => { e.alive = false; }); __fx.setDebug({ freezeEnemies: false }); });
+await sleep(400);
+s = await snap();
+check('마지막(1) 웨이브 클리어: 다음 웨이브 없이 클리어 상태', s.wavePhase === 'cleared' && s.wave === 1 && s.state === 'playing', `phase=${s.wavePhase} wave=${s.wave} state=${s.state}`);
+for (let i = 0; i < 40 && (await snap()).state !== 'gameover'; i++) await sleep(100);
+s = await snap();
+check('클리어 화면: STAGE CLEAR · 클리어! · 점수와 플레이 시간 표시',
+  s.state === 'gameover' && await page.isVisible('#overlay-gameover') && (await page.textContent('#go-eyebrow')) === 'STAGE CLEAR' && (await page.textContent('#go-title')) === '클리어!' && /^\d+:\d\d$/.test(await page.textContent('#go-time')),
+  `${await page.textContent('#go-eyebrow')} / ${await page.textContent('#go-title')} / ${await page.textContent('#go-time')}`);
+await page.screenshot({ path: `${SP}/shots/09e-clear.png` });
+await page.click('#btn-restart'); await sleep(200);
 await page.evaluate(() => { __fx.clearEnemies(); __fx.setDebug({ invincible: false, noSpawn: true, freezeEnemies: false }); __fx.world.waves.queue.length = 0; });
+check('클리어 후 다시 시작하면 새 판(클리어 상태 해제)', (await snap()).state === 'playing' && (await snap()).wavePhase !== 'cleared');
 
 // ── 일시 정지 / 포커스 손실
 await page.keyboard.press('Escape'); await sleep(100);
@@ -351,17 +365,8 @@ await page.click('#btn-resume'); await sleep(300);
 const xr0 = (await snap()).player.x; await sleep(300);
 check('재개 후 키가 눌린 채로 남지 않음', Math.abs((await snap()).player.x - xr0) < 1);
 
-// ── 웨이브 진행
-await page.evaluate(() => { __fx.setDebug({ noSpawn: false, invincible: true }); __fx.clearEnemies(); });
-const wv0 = (await snap()).wave;
-// 현재 웨이브 적을 빠르게 처치(대기열 비우기 포함)
-for (let i = 0; i < 60; i++) {
-  await page.evaluate(() => { const w = __fx.world; w.waves.queue.length = 0; w.enemies.forEach(e => { e.alive = false; }); if (w.waves.phase === 'intermission') w.waves.timer = Math.min(w.waves.timer, 0.05); });
-  await sleep(100);
-  if ((await snap()).wave >= wv0 + 2) break;
-}
-s = await snap();
-check('보스 처치 → 다음 웨이브(다음 보스) 시작', s.wave >= wv0 + 2, `wave ${wv0} → ${s.wave}`);
+// ── 웨이브 1 시작: 보스 등장 위치
+await page.evaluate(() => { __fx.setDebug({ noSpawn: false, invincible: true }); __fx.clearEnemies(); const w = __fx.world; w.waves.wave = 0; w.waves.phase = 'intermission'; w.waves.timer = 0.05; });
 const firstSeen = new Map();
 for (let i = 0; i < 30; i++) {
   await sleep(100);
@@ -369,7 +374,7 @@ for (let i = 0; i < 30; i++) {
   for (const e of t.enemies) if (!firstSeen.has(e.id)) firstSeen.set(e.id, { x: e.x, y: e.y, active: e.active, px: t.player.x, py: t.player.y });
 }
 s = await snap();
-check('새 웨이브에서 보스 생성(예고 후 활성)', firstSeen.size > 0 && s.enemies.some(e => e.active && e.kind === 'boss') && s.enemies.every(e => e.kind === 'boss'), `적 ${firstSeen.size}명`);
+check('웨이브 1에서 보스 생성(예고 후 활성)', firstSeen.size > 0 && s.enemies.some(e => e.active && e.kind === 'boss') && s.enemies.every(e => e.kind === 'boss'), `적 ${firstSeen.size}명`);
 const spawnOk = [...firstSeen.values()].every(f => Math.abs(f.x - f.px) >= 560 && Math.abs(f.y - 820) < 1);
 check('스폰 위치: 보스는 플레이어에게서 떨어진 바닥 위에서 나온다(생성 시점 기준)', spawnOk, JSON.stringify([...firstSeen.values()].map(f => [Math.round(f.x), Math.round(f.y), f.active])));
 
@@ -380,7 +385,7 @@ await sleep(1800);
 s = await snap();
 const goVisible = await page.isVisible('#overlay-gameover');
 const goScore = await page.textContent('#go-score');
-check('체력 0 → 게임 오버 + 최종 점수 표시', s.state === 'gameover' && goVisible && goScore.replace(/,/g, '') === String(s.score), `score=${goScore}`);
+check('체력 0 → 게임 오버 + 최종 점수 표시', s.state === 'gameover' && goVisible && goScore.replace(/,/g, '') === String(s.score) && (await page.textContent('#go-eyebrow')) === 'GAME OVER', `score=${goScore}`);
 await page.screenshot({ path: `${SP}/shots/10-gameover.png` });
 await page.keyboard.down('KeyD');
 await page.click('#btn-restart');
@@ -392,7 +397,7 @@ const xa = s.player.x; await sleep(300);
 check('재시작: 이전 입력이 남지 않음', Math.abs((await snap()).player.x - xa) < 1);
 check('재시작 클릭이 공격으로 나가지 않음', (await snap()).shots === 0);
 
-// ── 커서를 적 위에 올리고 클릭하면 맞는다: 21종 × 거리 (곡선의 끝점이 커서에 닿는다)
+// ── 커서를 적 위에 올리고 클릭하면 맞는다: 11종 × 거리 (곡선의 끝점이 커서에 닿는다)
 await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true, freezeEnemies: true, invincible: true }); __fx.clearEnemies(); __fx.unlockAll(); __fx.useFlatArena(); __fx.setPlayer(400, 600); });
 {
   const ids = await page.evaluate(() => __fx.world.weapons.map(w => w.id));
@@ -420,7 +425,7 @@ await page.evaluate(() => { __fx.setTimeScale(0); __fx.setDebug({ noSpawn: true,
       if (hp >= 100000) misses.push(`${id}@${dist}`);
     }
   }
-  check('커서를 적 위에 올리고 클릭하면 맞는다(21종 × 거리)', misses.length === 0 && combos === ids.length * 2, `${combos}조합 · 실패 [${misses.join(', ')}]`);
+  check(`커서를 적 위에 올리고 클릭하면 맞는다(${ids.length}종 × 거리)`, misses.length === 0 && combos === ids.length * 2, `${combos}조합 · 실패 [${misses.join(', ')}]`);
   // 원 공격 장면 캡처
   await page.evaluate(() => {
     __fx.equip(0, 'circle');

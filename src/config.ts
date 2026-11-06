@@ -89,7 +89,7 @@ export const LOADOUT = {
 
 /**
  * 함수 진화: 미분·부정적분·극한 연산으로 보유한 함수에서 새 함수를 만든다(결과는 수학적으로 맞는 함수).
- * 진화 포인트(EP)를 쓰며, 보스를 처치할 때마다 얻는다.
+ * 진화 포인트(EP)를 쓴다. 웨이브가 보스 한 판뿐이라 시작 포인트로 보스전 전에·도중에(E로 일시 정지) 진화한다.
  */
 export const EVOLUTION = {
   startPoints: 3,
@@ -158,25 +158,15 @@ export const WEAPON_TUNING = {
   exp: { damage: 46, cooldown: 0.9, range: 340, amplitude: 260, speed: 1350, hold: 0.14, fade: 0.24, hitRadius: 9, knockback: 380 },
   tan: { damage: 36, cooldown: 1.0, range: 460, amplitude: 220, speed: 1500, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
   circle: { damage: 34, cooldown: 0.65, range: 340, amplitude: 170, speed: 1200, hold: 0.22, fade: 0.26, hitRadius: 10, knockback: 280 },
-  // ── 다항함수 계보: 일차 →∫ 이차 →∫ 삼차 →∫ 사차
+  // ── 다항함수 계보: 일차 →∫ 이차 →∫ 삼차
   quadratic: { damage: 24, cooldown: 0.65, range: 600, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
   cubic: { damage: 26, cooldown: 0.7, range: 540, amplitude: 170, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 230 },
-  quartic: { damage: 30, cooldown: 0.75, range: 560, amplitude: 180, speed: 1650, hold: 0.16, fade: 0.24, hitRadius: 8, knockback: 260 },
-  // ── 극한으로 만든 초월함수
-  expdecay: { damage: 20, cooldown: 0.5, range: 560, amplitude: 150, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 160 },
+  // ── 삼각함수(이차·삼차의 극한)
   cosine: { damage: 16, cooldown: 0.34, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 140 },
   sine: { damage: 18, cooldown: 0.38, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
+  // 로그 계보의 뿌리(기본 함수)와 그 도함수 1/x
   log: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  well: { damage: 30, cooldown: 0.8, range: 460, amplitude: 110, speed: 1400, hold: 0.2, fade: 0.26, hitRadius: 12, knockback: 320 },
-  // ── 미분·적분으로 만든 함수
-  negsine: { damage: 17, cooldown: 0.36, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
-  negcosine: { damage: 17, cooldown: 0.36, range: 620, amplitude: 60, speed: 1900, hold: 0.12, fade: 0.2, hitRadius: 6, knockback: 150 },
   reciprocal: { damage: 22, cooldown: 0.55, range: 520, amplitude: 150, speed: 1700, hold: 0.14, fade: 0.22, hitRadius: 7, knockback: 200 },
-  xlnx: { damage: 26, cooldown: 0.6, range: 520, amplitude: 150, speed: 1600, hold: 0.14, fade: 0.22, hitRadius: 8, knockback: 220 },
-  secsq: { damage: 34, cooldown: 0.9, range: 420, amplitude: 200, speed: 1300, hold: 0.16, fade: 0.24, hitRadius: 9, knockback: 280 },
-  neglncos: { damage: 30, cooldown: 0.8, range: 440, amplitude: 170, speed: 1400, hold: 0.16, fade: 0.24, hitRadius: 9, knockback: 260 },
-  sgn: { damage: 26, cooldown: 0.55, range: 420, amplitude: 120, speed: 1500, hold: 0.16, fade: 0.22, hitRadius: 10, knockback: 240 },
-  xabs: { damage: 28, cooldown: 0.7, range: 460, amplitude: 150, speed: 1600, hold: 0.14, fade: 0.22, hitRadius: 8, knockback: 230 },
 } satisfies Record<string, WeaponTuning>;
 
 /**
@@ -326,7 +316,10 @@ export const ENEMIES = {
 export const WAVES = {
   firstDelay: 2.0,
   intermission: 3.6,
-  /** 모든 웨이브는 보스 한 마리뿐이다(잡몹 웨이브 없음). */
+  /** 웨이브 수. 마지막 웨이브를 깨면 클리어 화면으로 끝난다. (웨이브는 보스 한 마리뿐이다.) */
+  total: 1,
+  /** 마지막 보스를 쓰러뜨린 뒤 클리어 화면이 뜨기까지의 시간(초). */
+  clearDelay: 2.4,
   hpMultiplier: (wave: number) => 1 + 0.16 * (wave - 1),
   speedMultiplier: (wave: number) => Math.min(1.45, 1 + 0.045 * (wave - 1)),
   damageMultiplier: (wave: number) => 1 + 0.05 * (wave - 1),

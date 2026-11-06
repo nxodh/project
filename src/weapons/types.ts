@@ -46,7 +46,7 @@ export interface FunctionWeaponDef {
   trace?: (t: number) => { u: number; v: number };
   /**
    * 기본 함수 여부. 기본 함수는 처음부터 가지고 있다: 다른 함수에서 미분·적분·극한으로 만들 수 없거나
-   * (원, eˣ) 같은 계보의 뿌리(일차·절댓값·탄젠트)이기 때문이다. 이유는 starterReason에 적는다. 나머지는 진화로만 얻는다.
+   * (원, eˣ, 절댓값, 탄젠트) 계보의 뿌리(일차·로그)이기 때문이다. 이유는 starterReason에 적는다. 나머지는 진화로만 얻는다.
    */
   starter?: boolean;
   /** 기본 함수인 이유(인벤토리에 표시). starter일 때 필수. */
