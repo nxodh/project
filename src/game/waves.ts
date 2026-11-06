@@ -6,7 +6,8 @@ import type { World } from './world';
 export interface WaveState {
   /** 현재(또는 마지막으로 시작한) 웨이브 번호. 0이면 아직 시작 전. */
   wave: number;
-  phase: 'intermission' | 'active';
+  /** cleared: 마지막 웨이브(WAVES.total)를 깨서 더 이상 웨이브가 없다. */
+  phase: 'intermission' | 'active' | 'cleared';
   /** 다음 웨이브까지 남은 준비 시간. */
   timer: number;
   queue: EnemyKind[];
@@ -140,7 +141,7 @@ function recallStragglers(world: World): void {
 
 export function updateWaves(world: World, dt: number): void {
   const w = world.waves;
-  if (!world.player.alive) return;
+  if (!world.player.alive || w.phase === 'cleared') return;
 
   if (w.phase === 'intermission') {
     w.timer -= dt;
@@ -154,6 +155,14 @@ export function updateWaves(world: World, dt: number): void {
   const alive = world.enemies.reduce((n, e) => n + (e.alive ? 1 : 0), 0);
 
   if (w.queue.length === 0 && alive === 0) {
+    if (w.wave >= WAVES.total) {
+      // 마지막 웨이브 클리어: 잠시 연출을 보여 준 뒤 클리어 화면으로 끝난다.
+      w.phase = 'cleared';
+      world.cleared = true;
+      world.gameOverTimer = WAVES.clearDelay;
+      world.showBanner('STAGE CLEAR', '함수의 군주를 쓰러뜨렸다!', '#ffffff', WAVES.clearDelay + 1);
+      return;
+    }
     const p = world.player;
     const healed = Math.min(PLAYER.waveHeal, p.maxHp - p.hp);
     p.hp += healed;

@@ -3,12 +3,15 @@ import { InventoryView, type InventoryModel } from './inventory';
 
 export interface GameOverStats {
   score: number;
-  wave: number;
+  /** 플레이 시간(초). */
+  time: number;
   kills: number;
   best: number;
   newBest: boolean;
   accuracy: number;
   bosses: number;
+  /** 보스를 쓰러뜨려 클리어했는가(아니면 사망). */
+  cleared: boolean;
 }
 
 function $(id: string): HTMLElement {
@@ -69,7 +72,10 @@ export class Overlays {
 
   showGameOver(stats: GameOverStats): void {
     $('go-score').textContent = stats.score.toLocaleString('en-US');
-    $('go-wave').textContent = String(stats.wave);
+    $('go-eyebrow').textContent = stats.cleared ? 'STAGE CLEAR' : 'GAME OVER';
+    $('go-title').textContent = stats.cleared ? '클리어!' : '게임 오버';
+    const sec = Math.floor(stats.time);
+    $('go-time').textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
     $('go-kills').textContent = String(stats.kills);
     $('go-acc').textContent = `${stats.accuracy}%`;
     $('go-bosses').textContent = String(stats.bosses);

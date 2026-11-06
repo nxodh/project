@@ -11,8 +11,8 @@ import { FakeInput } from './helpers';
 
 /*
  * 자동 플레이 소크 테스트: 간단한 봇(조준 각도와 함수를 미리보기 경로로 골라 쏘고, 근접형에게서 물러남)이
- * 실제 시스템 전체(입력→물리→무기→AI→웨이브)를 2분간 돌린다. 적이 어딘가에 끼어 웨이브가 멈추지 않는지,
- * 좌표가 NaN이 되지 않는지, 5종 함수가 모두 실전에서 쓰이는지 확인한다.
+ * 실제 시스템 전체(입력→물리→무기→AI→웨이브)를 돌린다. 보스가 어딘가에 끼어 클리어가 막히지 않는지,
+ * 좌표가 NaN이 되지 않는지, 여러 함수가 실전에서 쓰이는지 확인한다.
  */
 function pathHits(world: World, wi: number): number {
   const p = computeAttackPath(world, wi);
@@ -33,9 +33,9 @@ function runSim(seed: number, smart: boolean, maxTime: number, invincible = fals
   const world = new World(seed);
   world.debug.invincible = invincible;
   const input = new FakeInput();
-  // 인벤토리를 실전처럼 구성한다: 진화로 이차·삼차·사차함수를 얻어 슬롯에 꽂는다(진화 포인트를 넉넉히 준다)
-  world.evoPoints = 10;
-  for (const [from, op] of [['linear', 'int'], ['quadratic', 'int'], ['cubic', 'int'], ['quadratic', 'lim']] as const) evolveWeapon(world, from, op);
+  // 인벤토리를 실전처럼 구성한다: 시작 진화 포인트(3)로 이차·삼차·코사인을 얻어 슬롯에 꽂는다
+  world.evoPoints = 4;
+  for (const [from, op] of [['linear', 'int'], ['quadratic', 'int'], ['quadratic', 'lim']] as const) evolveWeapon(world, from, op);
   equipWeapon(world, 0, 'quadratic');
   equipWeapon(world, 2, 'cubic');
   equipWeapon(world, 3, 'cosine');
@@ -100,18 +100,20 @@ function runSim(seed: number, smart: boolean, maxTime: number, invincible = fals
       maxLife = Math.max(maxLife, life);
     }
     if (!world.player.alive) { deathTime = t; break; }
+    if (world.cleared) break;
   }
-  return { bosses: world.stats.bossesDefeated, px: world.player.body.x, py: world.player.body.y, wave: world.waves.wave, kills: world.kills, score: world.score, hp: world.player.hp, deathTime, usage, shots: world.stats.shots, hits: world.stats.hits, maxLife, multi: world.stats.bestMultiKill };
+  return { cleared: world.cleared, time: t, bosses: world.stats.bossesDefeated, px: world.player.body.x, py: world.player.body.y, wave: world.waves.wave, kills: world.kills, score: world.score, hp: world.player.hp, deathTime, usage, shots: world.stats.shots, hits: world.stats.hits, maxLife, multi: world.stats.bestMultiKill };
 }
 
-it('봇 2분 플레이(무적): 보스 웨이브가 멈추지 않고 이어지며 진화로 얻은 함수를 포함해 여러 슬롯이 쓰인다', () => {
+it('봇 플레이(무적): 보스 한 판을 깨고 클리어하며, 진화로 얻은 함수를 포함해 여러 슬롯이 쓰인다', () => {
   const r = runSim(5, true, 150, true);
-  // 보스가 90초 넘게 살아 있으면 어딘가 끼어 웨이브가 멈춘 것이다.
+  // 보스가 90초 넘게 살아 있으면 어딘가 끼어 클리어가 막힌 것이다.
   expect(r.maxLife).toBeLessThan(90);
-  expect(r.wave).toBeGreaterThanOrEqual(4);
-  expect(r.bosses).toBeGreaterThanOrEqual(3);
-  // 봇은 매번 피해가 큰 슬롯을 고르므로 모든 슬롯을 쓰지는 않지만 여러 슬롯이 쓰인다.
-  expect(r.usage.filter((u) => u > 0).length).toBeGreaterThanOrEqual(3);
+  expect(r.cleared).toBe(true);
+  expect(r.wave).toBe(1);
+  expect(r.bosses).toBe(1);
+  // 봇은 매번 피해가 큰 슬롯을 고르므로 모든 슬롯을 쓰지는 않지만(보스 한 판이라 더 적다) 여러 슬롯이 쓰인다.
+  expect(r.usage.filter((u) => u > 0).length).toBeGreaterThanOrEqual(2);
   expect(Number.isFinite(r.px) && Number.isFinite(r.py)).toBe(true);
 }, 120000);
 

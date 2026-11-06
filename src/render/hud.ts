@@ -215,13 +215,15 @@ function drawTopBar(ctx: CanvasRenderingContext2D, world: World): void {
   ctx.textAlign = 'center';
   ctx.font = `bold 24px ${PALETTE.font}`;
   ctx.fillStyle = PALETTE.text;
-  ctx.fillText(w.wave > 0 ? `WAVE ${w.wave}` : 'READY', VIEW.width / 2, y + 18);
+  ctx.fillText(w.phase === 'cleared' ? 'CLEAR' : w.wave > 0 ? 'BOSS' : 'READY', VIEW.width / 2, y + 18);
   ctx.font = `13px ${PALETTE.font}`;
   ctx.fillStyle = PALETTE.textDim;
   const sub =
     w.phase === 'intermission'
-      ? `다음 보스까지 ${Math.max(0, w.timer).toFixed(1)}초 · E로 장비 정비`
-      : `남은 보스 ${enemiesRemaining(world)}`;
+      ? `보스 등장까지 ${Math.max(0, w.timer).toFixed(1)}초 · E로 장비 정비`
+      : w.phase === 'cleared'
+        ? '모든 적을 쓰러뜨렸다'
+        : `남은 적 ${enemiesRemaining(world)}`;
   ctx.fillText(sub, VIEW.width / 2, y + 38);
 
   // 처치 수

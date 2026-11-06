@@ -201,7 +201,8 @@ function killEnemy(world: World, e: Enemy, a: CurveAttack, hit: CurveHit): void 
 /** 플레이어 피격. 무적 시간 중이면 무시한다. source는 통계(어떤 공격에 얼마나 맞았는지)용. */
 export function damagePlayer(world: World, amount: number, fromX: number, source = 'other'): boolean {
   const p = world.player;
-  if (!p.alive || p.invuln > 0) return false;
+  // 클리어한 뒤에는 남은 곡선에 맞아도 피해가 없다(클리어 화면이 게임 오버로 바뀌지 않게).
+  if (!p.alive || p.invuln > 0 || world.cleared) return false;
   world.stats.damageTaken[source] = (world.stats.damageTaken[source] ?? 0) + amount;
   p.invuln = PLAYER.invulnTime;
   p.hurtFlash = PLAYER.hurtFlashTime;

@@ -22,11 +22,10 @@ function slopes(ly: Float64Array, lx: Float64Array): number[] {
 }
 
 describe('함수 무기 등록', () => {
-  it('21종이 카탈로그 순서대로 등록되어 있고 기본 함수가 앞에 온다', () => {
+  it('교과서 함수 11종이 카탈로그 순서대로 등록되어 있고 기본 함수가 앞에 온다', () => {
     expect(getWeapons().map((w) => w.id)).toEqual([
-      'linear', 'abs', 'exp', 'tan', 'circle',
-      'quadratic', 'cubic', 'quartic', 'expdecay', 'cosine', 'sine', 'log', 'well',
-      'negsine', 'negcosine', 'reciprocal', 'xlnx', 'secsq', 'neglncos', 'sgn', 'xabs',
+      'linear', 'abs', 'exp', 'tan', 'circle', 'log',
+      'quadratic', 'cubic', 'cosine', 'sine', 'reciprocal',
     ]);
   });
 

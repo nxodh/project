@@ -45,8 +45,8 @@ body.playing #game {
 .overlay {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
+  /* flex + margin:auto: 패널이 창보다 크면 위쪽이 잘리지 않고 맨 위부터 스크롤된다(grid 가운데 정렬은 위가 잘림). */
+  display: flex;
   padding: 16px;
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.88));
   backdrop-filter: blur(2px);
@@ -58,6 +58,7 @@ body.playing #game {
 }
 
 .panel {
+  margin: auto;
   width: min(760px, 100%);
   padding: 28px 32px;
   border: 1px solid var(--line);
@@ -65,6 +66,30 @@ body.playing #game {
   background: var(--panel);
   box-shadow: 0 0 40px rgba(255, 255, 255, 0.06);
   text-align: center;
+}
+
+/* 시작 화면: 함수 목록만 안에서 스크롤하고 제목·조작법·시작 버튼은 항상 화면 안에 둔다. */
+#overlay-start .panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
+#overlay-start .weapons {
+  flex: 1 1 auto;
+  min-height: 96px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+#overlay-start .panel > :not(.weapons) {
+  flex: none;
+}
+
+#overlay-start .panel > button {
+  align-self: center;
 }
 
 .panel.small {
@@ -231,6 +256,42 @@ button.primary:focus-visible {
   font-size: 14px;
 }
 
+/* 세로가 짧은 화면(노트북 125%·150% 배율 등)에서는 여백과 글자를 줄인다. */
+@media (max-height: 760px) {
+  .overlay {
+    padding: 10px;
+  }
+  .panel {
+    padding: 18px 22px;
+  }
+  #overlay-start .panel {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+  h1 {
+    margin-bottom: 6px;
+    font-size: 30px;
+  }
+  .lead {
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .weapons {
+    margin-bottom: 12px;
+    gap: 4px;
+  }
+  .weapons li {
+    padding: 5px 10px;
+  }
+  .controls {
+    margin-bottom: 12px;
+  }
+  .inv-slot {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .weapons li {
     grid-template-columns: 24px 80px 1fr;
@@ -250,6 +311,14 @@ button.primary:focus-visible {
 }
 
 .inv-head {
+  /* 인벤토리를 아래로 스크롤해도 닫기 버튼이 보이도록 위에 붙인다. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 0 10px;
+  background: #000000;
+  /* 붙었을 때 위쪽 여백(오버레이 padding)으로 카드가 비치지 않게 가린다. */
+  box-shadow: 0 -16px 0 0 #000000;
   display: flex;
   align-items: center;
   justify-content: space-between;

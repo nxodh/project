@@ -3,7 +3,7 @@ import '../src/weapons/functions';
 import { STEP, WAVES } from '../src/config';
 import { random, setSeed } from '../src/core/rng';
 import { rectsOverlap } from '../src/core/geometry';
-import { updateBullets } from '../src/game/combat';
+import { damagePlayer, updateBullets } from '../src/game/combat';
 import { updateEnemies } from '../src/game/enemyAI';
 import { buildQueue, findSpawnPoint, isBossWave, spawnEnemy, updateWaves } from '../src/game/waves';
 import { World } from '../src/game/world';
@@ -211,26 +211,30 @@ describe('웨이브와 스폰', () => {
     }
   });
 
-  it('보스를 처치하면 준비 시간 뒤 다음 웨이브가 시작되고, 보스 체력이 조금씩 오른다', () => {
+  it('웨이브는 보스 한 판뿐: 보스를 처치하면 다음 웨이브 없이 클리어되고 잠시 뒤 결과 화면으로 넘어간다', () => {
+    expect(WAVES.total).toBe(1);
     const world = new World(1);
-    world.player.hp = 50;
-    const bossHp: number[] = [];
-    let lastWave = 0;
-    for (let i = 0; i < 60 / STEP && world.waves.wave < 4; i++) {
+    let bosses = 0;
+    for (let i = 0; i < 60 / STEP; i++) {
       updateWaves(world, STEP);
-      if (world.waves.wave !== lastWave) {
-        lastWave = world.waves.wave;
-        expect(world.waves.total).toBe(1);
-      }
       for (const e of world.enemies) {
-        if (e.kind === 'boss' && !bossHp.includes(e.maxHp) && bossHp.length < world.waves.wave) bossHp.push(e.maxHp);
+        if (e.kind === 'boss' && e.alive) bosses++;
         e.alive = false; // 나타난 보스는 즉시 처치
       }
       world.enemies.length = 0;
     }
-    expect(bossHp.length).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < bossHp.length; i++) expect(bossHp[i]).toBeGreaterThan(bossHp[i - 1]);
-    expect(world.player.hp).toBeGreaterThan(50); // 웨이브 클리어 회복
+    expect(bosses).toBe(1);
+    expect(world.waves.wave).toBe(1);
+    expect(world.waves.phase).toBe('cleared');
+    expect(world.cleared).toBe(true);
+    expect(world.gameOverTimer).toBeCloseTo(WAVES.clearDelay, 6); // 타이머는 Game.step이 줄인다
+  });
+
+  it('클리어한 뒤에는 남은 곡선에 맞아도 피해가 없다', () => {
+    const world = new World(1);
+    world.cleared = true;
+    expect(damagePlayer(world, 30, world.player.body.x + 50)).toBe(false);
+    expect(world.player.hp).toBe(world.player.maxHp);
   });
 
   it('보스를 잡기 전에는 웨이브가 클리어되지 않고, 보스는 한 마리만 나온다(웨이브가 겹쳐 나오지 않는다)', () => {
@@ -240,10 +244,10 @@ describe('웨이브와 스폰', () => {
     expect(world.waves.phase).toBe('active');
     expect(world.enemies.filter((e) => e.alive && e.kind === 'boss').length).toBe(1);
     expect(world.stats.bossesDefeated).toBe(0);
-    // 보스를 처치하면 그때 클리어되고, 다음 보스는 준비 시간 뒤에 나온다
+    // 보스를 처치하면 그때 클리어된다(마지막 웨이브라 다음 보스는 없다)
     for (const e of world.enemies) e.alive = false;
     updateWaves(world, STEP);
-    expect(world.waves.phase).toBe('intermission');
+    expect(world.waves.phase).toBe('cleared');
     expect(world.enemies.filter((e) => e.alive).length).toBe(0);
   });
 

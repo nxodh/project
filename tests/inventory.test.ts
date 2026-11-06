@@ -6,9 +6,9 @@ import { World } from '../src/game/world';
 import { FakeInput } from './helpers';
 
 describe('인벤토리(보유 함수와 핫바 장비)', () => {
-  it('기본 함수 5종만 가지고 시작하고, 시작 장비는 설정대로이며 진화 포인트가 있다', () => {
+  it('기본 함수 6종만 가지고 시작하고, 시작 장비는 설정대로이며 진화 포인트가 있다', () => {
     const w = new World(1);
-    expect([...w.owned].sort()).toEqual(['abs', 'circle', 'exp', 'linear', 'tan']);
+    expect([...w.owned].sort()).toEqual(['abs', 'circle', 'exp', 'linear', 'log', 'tan']);
     expect(w.loadout.map((s) => s.weaponId)).toEqual([...LOADOUT.initial]);
     expect(LOADOUT.initial.every((id) => w.owned.has(id))).toBe(true);
     expect(w.evoPoints).toBe(EVOLUTION.startPoints);
@@ -58,19 +58,21 @@ describe('인벤토리(보유 함수와 핫바 장비)', () => {
     expect(evolveWeapon(w, 'circle', 'lim')).toEqual({ ok: false, reason: 'no-result' });
     expect(w.evoPoints).toBe(ep);
     expect(evolveWeapon(w, 'linear', 'int').ok).toBe(true);
-    w.owned.add('expdecay');
-    expect(evolveWeapon(w, 'linear', 'lim')).toEqual({ ok: false, reason: 'already-owned' });
+    w.owned.add('reciprocal');
+    expect(evolveWeapon(w, 'log', 'd')).toEqual({ ok: false, reason: 'already-owned' });
+    expect(evolveWeapon(w, 'tan', 'd')).toEqual({ ok: false, reason: 'no-result' }); // sec²x는 도감에 없음
     w.evoPoints = 0;
-    expect(evolveWeapon(w, 'abs', 'd')).toEqual({ ok: false, reason: 'no-points' });
-    expect(w.owned.has('sgn')).toBe(false);
+    expect(evolveWeapon(w, 'quadratic', 'int')).toEqual({ ok: false, reason: 'no-points' });
+    expect(w.owned.has('cubic')).toBe(false);
   });
 
   it('극한은 미분·적분보다 비싸다', () => {
     const w = new World(1);
+    w.owned.add('quadratic');
     w.evoPoints = EVOLUTION.cost.lim - 1;
-    expect(evolveWeapon(w, 'abs', 'lim')).toEqual({ ok: false, reason: 'no-points' });
+    expect(evolveWeapon(w, 'quadratic', 'lim')).toEqual({ ok: false, reason: 'no-points' });
     w.evoPoints = EVOLUTION.cost.lim;
-    expect(evolveWeapon(w, 'abs', 'lim')).toEqual({ ok: true, unlocked: 'well' });
+    expect(evolveWeapon(w, 'quadratic', 'lim')).toEqual({ ok: true, unlocked: 'cosine' });
     expect(w.evoPoints).toBe(0);
   });
 

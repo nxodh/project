@@ -201,12 +201,13 @@ export class Game {
     if (newBest) saveBest(w.score);
     this.ui.showGameOver({
       score: w.score,
-      wave: w.waves.wave,
+      time: w.time,
       kills: w.kills,
       best: Math.max(prevBest, w.score),
       newBest: newBest && w.score > 0,
       accuracy: w.stats.shots > 0 ? Math.round((w.stats.hits / w.stats.shots) * 100) : 0,
       bosses: w.stats.bossesDefeated,
+      cleared: w.cleared,
     });
   }
 }

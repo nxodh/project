@@ -65,8 +65,10 @@ export class World {
   kills = 0;
   time = 0;
   shake = 0;
-  /** 플레이어 사망 후 게임 오버 화면까지 남은 시간(음수면 비활성). */
+  /** 플레이어 사망(또는 클리어) 후 결과 화면까지 남은 시간(음수면 비활성). */
   gameOverTimer = -1;
+  /** 마지막 웨이브를 깼는가(결과 화면이 '클리어'로 뜬다). */
+  cleared = false;
   banner: Banner | null = null;
   /** 테스트·디버그용 스위치. */
   readonly debug = { freezeEnemies: false, invincible: false, noSpawn: false };

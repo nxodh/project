@@ -38,7 +38,7 @@ function samples(def: FunctionWeaponDef, n = 40): number[] {
   const out: number[] = [];
   for (let k = 1; k < n; k++) {
     const x = x0 + ((x1 - x0) * k) / n;
-    if (Math.abs(x) > 1e-3 || !['abs', 'sgn', 'xabs'].includes(def.id)) out.push(x);
+    if (Math.abs(x) > 1e-3 || def.id !== 'abs') out.push(x);
   }
   return out;
 }
@@ -53,13 +53,13 @@ describe('함수 진화 그래프의 수학적 정합성', () => {
   }
 
   it('모든 간선의 결과 함수가 실제로 존재한다', () => {
-    expect(edges.length).toBeGreaterThanOrEqual(30);
+    expect(edges.length).toBe(12); // 10개 + (eˣ)′·∫eˣ 자기 자신 2개
     for (const e of edges) expect(weaponById(e.to.id)).toBeDefined();
   });
 
   it('미분 간선: f′ 가 결과 함수의 양의 상수배(+상수)다', () => {
     const ds = edges.filter((e) => e.op === 'd' && e.to.id !== e.from.id);
-    expect(ds.length).toBeGreaterThanOrEqual(10);
+    expect(ds.length).toBe(4);
     for (const { from, to } of ds) {
       const xs = samples(from);
       const dv = xs.map((x) => numDeriv(from.fn, x));
@@ -72,7 +72,7 @@ describe('함수 진화 그래프의 수학적 정합성', () => {
 
   it('부정적분 간선: 결과 함수를 미분하면 원래 함수의 양의 상수배다', () => {
     const is = edges.filter((e) => e.op === 'int' && e.to.id !== e.from.id);
-    expect(is.length).toBeGreaterThanOrEqual(10);
+    expect(is.length).toBe(4);
     for (const { from, to } of is) {
       const xs = samples(to);
       const dv = xs.map((x) => numDeriv(to.fn, x));
@@ -92,15 +92,10 @@ describe('함수 진화 그래프의 수학적 정합성', () => {
 
   it('극한 간선: n→∞로 갈수록 부분합이 결과 함수에 수렴한다', () => {
     const lims = edges.filter((e) => e.op === 'lim');
-    expect(lims.map((e) => `${e.from.id}→${e.to.id}`).sort()).toEqual([
-      'abs→well', 'cubic→sine', 'linear→expdecay', 'quadratic→cosine', 'quartic→log',
-    ]);
+    expect(lims.map((e) => `${e.from.id}→${e.to.id}`).sort()).toEqual(['cubic→sine', 'quadratic→cosine']);
     const probe: Record<string, number[]> = {
-      expdecay: [0.5, 1, 2, 3.5],
       cosine: [0.5, 2, 5, 9],
       sine: [0.5, 2, 5, 9],
-      log: [0.4, 0.8, 1.3, 1.7],
-      well: [-0.95, -0.5, 0, 0.5, 0.95],
     };
     for (const { from, to } of lims) {
       const series = from.evolves!.lim!.series!;
@@ -108,8 +103,8 @@ describe('함수 진화 그래프의 수학적 정합성', () => {
       for (const x of probe[to.id]) {
         const exact = to.fn(x);
         const err = (n: number) => Math.abs(series(x, n) - exact);
-        const big = to.id === 'log' ? 4000 : to.id === 'well' ? 400 : to.id === 'expdecay' ? 5000 : 60;
-        expect(err(big), `${from.id}→${to.id} @${x}`).toBeLessThan(to.id === 'log' ? 0.02 : 1e-3);
+        const big = 60;
+        expect(err(big), `${from.id}→${to.id} @${x}`).toBeLessThan(1e-3);
         // 항을 늘릴수록 오차가 줄어든다(처음 몇 항보다 훨씬 작다)
         expect(err(big)).toBeLessThan(err(2) + 1e-12);
       }
@@ -121,19 +116,22 @@ describe('함수 진화 그래프의 수학적 정합성', () => {
     expect(q.evolves!.d!.to).toBe('linear'); // (−x²)′ = −2x
     expect(q.evolves!.int!.to).toBe('cubic'); // ∫ = −x³/3
     expect(byId('sine').evolves!.d!.to).toBe('cosine');
-    expect(byId('cosine').evolves!.d!.to).toBe('negsine'); // (cos x)′ = −sin x
-    expect(byId('sine').evolves!.int!.to).toBe('negcosine'); // ∫sin = −cos
+    expect(byId('cosine').evolves!.int!.to).toBe('sine'); // ∫cos = sin
     expect(byId('log').evolves!.d!.to).toBe('reciprocal');
-    expect(byId('tan').evolves!.d!.to).toBe('secsq');
-    expect(byId('abs').evolves!.d!.to).toBe('sgn');
+    expect(byId('reciprocal').evolves!.int!.to).toBe('log');
+    // 결과가 도감에 없는 연산은 간선이 없다: (cos x)′ = −sin x, ∫sin = −cos x, tan·|x|의 미분·적분
+    expect(byId('cosine').evolves!.d).toBeUndefined();
+    expect(byId('sine').evolves!.int).toBeUndefined();
+    expect(byId('tan').evolves).toBeUndefined();
+    expect(byId('abs').evolves).toBeUndefined();
   });
 });
 
 describe('기본 함수와 도달 가능성', () => {
   const starters = all().filter((w) => w.starter).map((w) => w.id);
 
-  it('기본 함수 5종: 일차·절댓값·지수·탄젠트·원', () => {
-    expect([...starters].sort()).toEqual(['abs', 'circle', 'exp', 'linear', 'tan']);
+  it('기본 함수 6종: 일차·절댓값·지수·탄젠트·원·로그', () => {
+    expect([...starters].sort()).toEqual(['abs', 'circle', 'exp', 'linear', 'log', 'tan']);
   });
 
   it('기본 함수만으로 진화를 반복하면 나머지 모든 함수에 도달한다', () => {

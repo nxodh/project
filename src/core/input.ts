@@ -95,6 +95,8 @@ export class Input {
     window.addEventListener(
       'wheel',
       (e) => {
+        // 시작·인벤토리 등 오버레이 위에서는 휠로 화면을 스크롤해야 하므로 막지도, 무기 교체로 세지도 않는다.
+        if (e.target instanceof Element && e.target.closest('.overlay')) return;
         e.preventDefault();
         let dy = e.deltaY;
         if (e.deltaMode === 1) dy *= 40;
